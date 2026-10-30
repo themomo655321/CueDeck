@@ -4,11 +4,11 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.lazy.grid.GridCells
-import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.ChevronLeft
+import androidx.compose.material.icons.filled.ChevronRight
 import androidx.compose.material.icons.filled.Loop
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
@@ -28,63 +28,116 @@ import com.cuedeck.ui.theme.DarkSurfaceVariant
 fun CartGridSection(
     banks: List<CartBank>,
     activeBankIndex: Int,
+    cartPageIndex: Int,
     cues: List<Cue>,
     activePlaybacks: List<ActivePlayback>,
     isPerformanceLocked: Boolean,
     onSelectBank: (Int) -> Unit,
+    onPrevPage: () -> Unit,
+    onNextPage: () -> Unit,
     onTriggerSlot: (Int) -> Unit,
     onAssignSlot: (Int) -> Unit,
     modifier: Modifier = Modifier
 ) {
     val activeBank = banks.getOrNull(activeBankIndex) ?: return
 
+    val totalSlots = 18 // Support up to 18 pads across 6 pages of 3 pads
+    val totalPages = (totalSlots / 3).coerceAtLeast(1)
+    val pageStartSlot = (cartPageIndex % totalPages) * 3
+
     Column(modifier = modifier.fillMaxWidth()) {
-        // Bank Switcher Tabs
-        ScrollableTabRow(
-            selectedTabIndex = activeBankIndex,
-            containerColor = Color.Transparent,
-            contentColor = Color.White,
-            edgePadding = 0.dp,
-            divider = {},
+        // Bank Header & Page indicator
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.SpaceBetween,
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(bottom = 8.dp)
+                .padding(horizontal = 4.dp, vertical = 2.dp)
         ) {
-            banks.forEachIndexed { index, bank ->
-                Tab(
-                    selected = activeBankIndex == index,
-                    onClick = { onSelectBank(index) },
-                    text = {
-                        Text(
-                            text = bank.name.uppercase(),
-                            fontSize = 12.sp,
-                            fontWeight = if (activeBankIndex == index) FontWeight.Bold else FontWeight.Normal
-                        )
-                    }
-                )
-            }
+            Text(
+                text = "${activeBank.name.uppercase()} • PAGE ${cartPageIndex + 1}/$totalPages",
+                fontSize = 11.sp,
+                fontWeight = FontWeight.Bold,
+                color = Color.Gray,
+                letterSpacing = 1.sp
+            )
+
+            Text(
+                text = "PADS ${pageStartSlot + 1}-${pageStartSlot + 3}",
+                fontSize = 10.sp,
+                color = Color.LightGray
+            )
         }
 
-        // 3x3 Grid of Cart Pads
-        LazyVerticalGrid(
-            columns = GridCells.Fixed(3),
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
-            verticalArrangement = Arrangement.spacedBy(8.dp),
-            modifier = Modifier.fillMaxWidth()
+        Spacer(modifier = Modifier.height(4.dp))
+
+        // 1x3 Soundcart with PREV and NEXT buttons on left and right
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(6.dp),
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(105.dp)
         ) {
-            items(9) { slotIndex ->
+            // PREVIOUS PAGE BUTTON (<)
+            Surface(
+                color = Color(0xFF222222),
+                shape = RoundedCornerShape(8.dp),
+                modifier = Modifier
+                    .width(42.dp)
+                    .fillMaxHeight()
+                    .clip(RoundedCornerShape(8.dp))
+                    .clickable { onPrevPage() }
+                    .border(1.dp, Color(0xFF333333), RoundedCornerShape(8.dp))
+            ) {
+                Box(contentAlignment = Alignment.Center) {
+                    Icon(
+                        imageVector = Icons.Default.ChevronLeft,
+                        contentDescription = "Previous Sounds",
+                        tint = Color.White,
+                        modifier = Modifier.size(28.dp)
+                    )
+                }
+            }
+
+            // 3 CART PADS (1x3)
+            for (offset in 0..2) {
+                val slotIndex = pageStartSlot + offset
                 val slot = activeBank.slots.find { it.index == slotIndex }
                 val cue = cues.find { it.id == slot?.cueId }
                 val active = activePlaybacks.find { it.cueId == cue?.id }
 
-                CartPadCell(
-                    slotIndex = slotIndex,
-                    cue = cue,
-                    activePlayback = active,
-                    isPerformanceLocked = isPerformanceLocked,
-                    onTrigger = { onTriggerSlot(slotIndex) },
-                    onAssign = { onAssignSlot(slotIndex) }
-                )
+                Box(modifier = Modifier.weight(1f).fillMaxHeight()) {
+                    CartPadCell(
+                        slotIndex = slotIndex,
+                        cue = cue,
+                        activePlayback = active,
+                        isPerformanceLocked = isPerformanceLocked,
+                        onTrigger = { onTriggerSlot(slotIndex) },
+                        onAssign = { onAssignSlot(slotIndex) }
+                    )
+                }
+            }
+
+            // NEXT PAGE BUTTON (>)
+            Surface(
+                color = Color(0xFF222222),
+                shape = RoundedCornerShape(8.dp),
+                modifier = Modifier
+                    .width(42.dp)
+                    .fillMaxHeight()
+                    .clip(RoundedCornerShape(8.dp))
+                    .clickable { onNextPage() }
+                    .border(1.dp, Color(0xFF333333), RoundedCornerShape(8.dp))
+            ) {
+                Box(contentAlignment = Alignment.Center) {
+                    Icon(
+                        imageVector = Icons.Default.ChevronRight,
+                        contentDescription = "Next Sounds",
+                        tint = Color.White,
+                        modifier = Modifier.size(28.dp)
+                    )
+                }
             }
         }
     }
@@ -106,7 +159,7 @@ private fun CartPadCell(
         color = if (isPlaying) padColor.copy(alpha = 0.35f) else DarkSurfaceVariant,
         shape = RoundedCornerShape(10.dp),
         modifier = Modifier
-            .aspectRatio(1f)
+            .fillMaxSize()
             .border(
                 width = if (isPlaying) 2.dp else 1.dp,
                 color = if (isPlaying) padColor else Color(0xFF333333),
@@ -123,7 +176,7 @@ private fun CartPadCell(
         Box(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(8.dp)
+                .padding(6.dp)
         ) {
             if (cue != null) {
                 // Top header: duration or remaining time
@@ -137,16 +190,16 @@ private fun CartPadCell(
                             imageVector = Icons.Default.Loop,
                             contentDescription = "Looping",
                             tint = if (isPlaying) Color(0xFF4CAF50) else Color.Gray,
-                            modifier = Modifier.size(14.dp)
+                            modifier = Modifier.size(13.dp)
                         )
                     } else {
-                        Spacer(modifier = Modifier.size(14.dp))
+                        Spacer(modifier = Modifier.size(13.dp))
                     }
 
                     val sec = if (isPlaying) activePlayback!!.remainingMs / 1000 else cue.effectiveDurationMs / 1000
                     Text(
                         text = "%d:%02d".format(sec / 60, sec % 60),
-                        fontSize = 11.sp,
+                        fontSize = 10.sp,
                         fontWeight = if (isPlaying) FontWeight.Bold else FontWeight.Normal,
                         color = if (isPlaying) Color(0xFF4CAF50) else Color.LightGray
                     )
@@ -155,7 +208,7 @@ private fun CartPadCell(
                 // Center Cue Title
                 Text(
                     text = cue.name,
-                    fontSize = 13.sp,
+                    fontSize = 12.sp,
                     fontWeight = FontWeight.Bold,
                     color = Color.White,
                     textAlign = TextAlign.Center,
@@ -188,12 +241,12 @@ private fun CartPadCell(
                             imageVector = Icons.Default.Add,
                             contentDescription = "Assign Pad",
                             tint = Color.Gray,
-                            modifier = Modifier.size(24.dp)
+                            modifier = Modifier.size(20.dp)
                         )
                     }
                     Text(
                         text = "PAD ${slotIndex + 1}",
-                        fontSize = 11.sp,
+                        fontSize = 10.sp,
                         color = Color(0xFF555555),
                         fontWeight = FontWeight.Medium
                     )

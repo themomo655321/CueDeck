@@ -162,6 +162,36 @@ class DesktopAudioEngine : AudioEngine {
         }
     }
 
+    override fun setTrackVolume(playbackId: String, volume: Float, smoothingMs: Long) {
+        val track = activeTracks[playbackId] ?: return
+        if (track.isFadingOut) return
+
+        val targetVol = (volume * currentMasterVolume).coerceIn(0f, 1.5f)
+        if (smoothingMs <= 0L) {
+            track.fadeJob?.cancel()
+            track.currentVolume = targetVol
+            applyVolumeToClip(track.clip, targetVol)
+        } else {
+            track.fadeJob?.cancel()
+            track.fadeJob = engineScope.launch {
+                val startVol = track.currentVolume
+                val steps = (smoothingMs / 25L).coerceAtLeast(1)
+                val delta = (targetVol - startVol) / steps
+                for (i in 0 until steps) {
+                    delay(25)
+                    if (track.clip.isOpen) {
+                        track.currentVolume = (track.currentVolume + delta).coerceIn(0f, 1.5f)
+                        applyVolumeToClip(track.clip, track.currentVolume)
+                    }
+                }
+                track.currentVolume = targetVol
+                if (track.clip.isOpen) {
+                    applyVolumeToClip(track.clip, targetVol)
+                }
+            }
+        }
+    }
+
     override fun setMasterVolume(volume: Float) {
         currentMasterVolume = volume
         for (track in activeTracks.values) {

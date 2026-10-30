@@ -171,6 +171,38 @@ class AndroidAudioEngine(private val context: Context) : AudioEngine {
         }
     }
 
+    override fun setTrackVolume(playbackId: String, volume: Float, smoothingMs: Long) {
+        val track = activeTracks[playbackId] ?: return
+        if (track.isFadingOut) return
+
+        val targetVol = (volume * currentMasterVolume).coerceIn(0f, 1.5f)
+        if (smoothingMs <= 0L) {
+            track.fadeJob?.cancel()
+            track.currentVolume = targetVol
+            try {
+                track.player.setVolume(targetVol, targetVol)
+            } catch (ignored: Exception) {}
+        } else {
+            track.fadeJob?.cancel()
+            track.fadeJob = engineScope.launch {
+                val startVol = track.currentVolume
+                val steps = (smoothingMs / 25L).coerceAtLeast(1)
+                val delta = (targetVol - startVol) / steps
+                for (i in 0 until steps) {
+                    delay(25)
+                    try {
+                        track.currentVolume = (track.currentVolume + delta).coerceIn(0f, 1.5f)
+                        track.player.setVolume(track.currentVolume, track.currentVolume)
+                    } catch (ignored: Exception) {}
+                }
+                track.currentVolume = targetVol
+                try {
+                    track.player.setVolume(targetVol, targetVol)
+                } catch (ignored: Exception) {}
+            }
+        }
+    }
+
     override fun setMasterVolume(volume: Float) {
         currentMasterVolume = volume
         for (track in activeTracks.values) {

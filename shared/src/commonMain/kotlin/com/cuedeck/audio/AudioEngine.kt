@@ -40,6 +40,11 @@ interface AudioEngine {
     suspend fun stopAll(fadeOutMs: Long = 0L)
 
     /**
+     * Updates individual track volume in real time with optional smoothing.
+     */
+    fun setTrackVolume(playbackId: String, volume: Float, smoothingMs: Long = 150L)
+
+    /**
      * Updates master volume in real time for all active streams.
      */
     fun setMasterVolume(volume: Float)

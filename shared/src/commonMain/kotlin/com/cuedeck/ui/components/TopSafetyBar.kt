@@ -30,6 +30,7 @@ fun TopSafetyBar(
     onToggleLock: () -> Unit,
     onVolumeChange: (Float) -> Unit,
     onPanicStop: () -> Unit,
+    onOpenSettings: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     var showVolumePopup by remember { mutableStateOf(false) }
@@ -71,8 +72,20 @@ fun TopSafetyBar(
                     }
                 }
 
-                // Quick Controls: Volume & Panic Stop
+                // Quick Controls: Settings, Volume & Panic Stop
                 Row(verticalAlignment = Alignment.CenterVertically) {
+                    // Settings Button
+                    IconButton(
+                        onClick = onOpenSettings,
+                        modifier = Modifier.size(38.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Tune,
+                            contentDescription = "Mixer & Show Settings",
+                            tint = Color.LightGray
+                        )
+                    }
+
                     // Volume trigger
                     IconButton(
                         onClick = { showVolumePopup = !showVolumePopup },

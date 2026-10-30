@@ -18,6 +18,15 @@ class CueDeckViewModel(
 
     val activePlaybacks: StateFlow<List<ActivePlayback>> = audioEngine.activePlaybacks
 
+    private val _settings = MutableStateFlow(AppSettings())
+    val settings: StateFlow<AppSettings> = _settings.asStateFlow()
+
+    private val _faderVolumes = MutableStateFlow(listOf(1.0f, 1.0f, 1.0f, 1.0f))
+    val faderVolumes: StateFlow<List<Float>> = _faderVolumes.asStateFlow()
+
+    private val _cartPageIndex = MutableStateFlow(0)
+    val cartPageIndex: StateFlow<Int> = _cartPageIndex.asStateFlow()
+
     init {
         // Auto-follow event listener
         coroutineScope.launch {
@@ -32,9 +41,9 @@ class CueDeckViewModel(
         val defaultBank = CartBank(
             id = UUID.randomUUID().toString(),
             name = "Main Cart",
-            rows = 3,
+            rows = 1,
             cols = 3,
-            slots = (0..8).map { CartSlot(it, null) }
+            slots = (0..17).map { CartSlot(it, null) }
         )
         return Show(
             id = showId,
@@ -129,6 +138,38 @@ class CueDeckViewModel(
     }
 
     /**
+     * Set fader volume (0.0 to 1.25) for a specific mixer channel (0..3).
+     * Automatically maps to the active sound on that channel with configured smoothing.
+     */
+    fun setFaderVolume(channelIndex: Int, volume: Float) {
+        val list = _faderVolumes.value.toMutableList()
+        if (channelIndex in list.indices) {
+            val clamped = volume.coerceIn(0f, 1.25f)
+            list[channelIndex] = clamped
+            _faderVolumes.value = list
+
+            val activeTrack = activePlaybacks.value.getOrNull(channelIndex)
+            if (activeTrack != null) {
+                audioEngine.setTrackVolume(activeTrack.playbackId, clamped, _settings.value.faderSmoothingMs)
+            }
+        }
+    }
+
+    fun updateSettings(newSettings: AppSettings) {
+        _settings.value = newSettings
+    }
+
+    fun nextCartPage() {
+        val totalPages = 6 // 18 slots / 3
+        _cartPageIndex.update { (it + 1) % totalPages }
+    }
+
+    fun prevCartPage() {
+        val totalPages = 6
+        _cartPageIndex.update { (it - 1 + totalPages) % totalPages }
+    }
+
+    /**
      * Stop a specific active playback
      */
     fun stopActivePlayback(playbackId: String, fadeOutMs: Long = 500L) {
@@ -140,9 +181,10 @@ class CueDeckViewModel(
     /**
      * Emergency Panic Stop: Stops all active audio immediately or with panic fade
      */
-    fun panicStop(fadeOutMs: Long = 0L) {
+    fun panicStop(fadeOutMs: Long? = null) {
+        val effectiveFade = fadeOutMs ?: _settings.value.panicFadeMs
         coroutineScope.launch {
-            audioEngine.stopAll(fadeOutMs)
+            audioEngine.stopAll(effectiveFade)
         }
     }
 
