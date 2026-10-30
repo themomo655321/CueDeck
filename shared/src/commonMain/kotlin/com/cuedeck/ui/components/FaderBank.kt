@@ -241,7 +241,7 @@ private fun TactileVerticalFader(
                 .fillMaxSize()
                 .pointerInput(totalHeight) {
                     detectTapGestures { offset ->
-                        val trackHeightPx = size.height
+                        val trackHeightPx = size.height.toFloat()
                         val touchY = offset.y.coerceIn(0f, trackHeightPx)
                         val newNormalized = (1f - (touchY / trackHeightPx)).coerceIn(0f, 1f)
                         val newVol = newNormalized * 1.25f
@@ -251,7 +251,7 @@ private fun TactileVerticalFader(
                 .pointerInput(totalHeight) {
                     detectDragGestures { change, _ ->
                         change.consume()
-                        val trackHeightPx = size.height
+                        val trackHeightPx = size.height.toFloat()
                         val touchY = change.position.y.coerceIn(0f, trackHeightPx)
                         val newNormalized = (1f - (touchY / trackHeightPx)).coerceIn(0f, 1f)
                         val newVol = newNormalized * 1.25f
