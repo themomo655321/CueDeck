@@ -51,6 +51,10 @@ android {
 
 dependencies {
     implementation(project(":shared"))
+    implementation(compose.runtime)
+    implementation(compose.foundation)
+    implementation(compose.material3)
+    implementation(compose.ui)
     implementation(libs.androidx.activity.compose)
     implementation(libs.androidx.core.ktx)
 }
