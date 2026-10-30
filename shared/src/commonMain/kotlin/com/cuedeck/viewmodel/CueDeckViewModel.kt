@@ -27,7 +27,12 @@ class CueDeckViewModel(
     private val _cartPageIndex = MutableStateFlow(0)
     val cartPageIndex: StateFlow<Int> = _cartPageIndex.asStateFlow()
 
+    private val _saveFeedback = MutableStateFlow<String?>(null)
+    val saveFeedback: StateFlow<String?> = _saveFeedback.asStateFlow()
+
     init {
+        loadInitialShow()
+
         // Auto-follow event listener
         coroutineScope.launch {
             audioEngine.playbackCompletedEvents.collect { completedCue ->
@@ -36,10 +41,20 @@ class CueDeckViewModel(
         }
     }
 
+    private fun loadInitialShow() {
+        val existing = repository.loadLastActiveShow()
+        if (existing != null) {
+            _show.value = existing
+            audioEngine.setMasterVolume(existing.masterVolume)
+        } else {
+            saveCurrentShow()
+        }
+    }
+
     private fun createDefaultShow(): Show {
-        val showId = UUID.randomUUID().toString()
+        val showId = "default_show"
         val defaultBank = CartBank(
-            id = UUID.randomUUID().toString(),
+            id = "default_bank_main",
             name = "Main Cart",
             rows = 1,
             cols = 3,
@@ -248,8 +263,15 @@ class CueDeckViewModel(
         saveCurrentShow()
     }
 
-    fun saveCurrentShow() {
+    fun saveCurrentShow(userInitiated: Boolean = false) {
         repository.saveShow(_show.value)
+        if (userInitiated) {
+            coroutineScope.launch {
+                _saveFeedback.value = "Show Saved ✓"
+                delay(2000)
+                _saveFeedback.value = null
+            }
+        }
     }
 
     fun loadShow(showId: String) {

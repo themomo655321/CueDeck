@@ -8,9 +8,6 @@ import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.VolumeOff
-import androidx.compose.material.icons.filled.VolumeUp
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -27,18 +24,19 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.cuedeck.model.ActivePlayback
 import com.cuedeck.ui.theme.DarkSurface
-import com.cuedeck.ui.theme.DarkSurfaceVariant
 import com.cuedeck.ui.theme.PanicRed
+import kotlin.math.abs
 import kotlin.math.roundToInt
 
 /**
- * 4-Channel Live Audio Fader Console.
+ * 4-Channel Live Audio Fader Console with Procreate-Style StreamLine Smoothing.
  * Directly maps each fader to the active sounding cues in sequence.
  */
 @Composable
 fun FaderBank(
     activePlaybacks: List<ActivePlayback>,
     faderVolumes: List<Float>,
+    smoothingPercent: Int = 65,
     onFaderChange: (channelIndex: Int, volume: Float) -> Unit,
     modifier: Modifier = Modifier
 ) {
@@ -67,7 +65,7 @@ fun FaderBank(
                     letterSpacing = 1.sp
                 )
                 Text(
-                    text = "ACTIVE: ${activePlaybacks.size.coerceAtMost(4)}/4",
+                    text = "SMOOTH: ${smoothingPercent}% • ACTIVE: ${activePlaybacks.size.coerceAtMost(4)}/4",
                     fontSize = 10.sp,
                     fontWeight = FontWeight.SemiBold,
                     color = if (activePlaybacks.isNotEmpty()) Color(0xFF4CAF50) else Color(0xFF777777)
@@ -91,6 +89,7 @@ fun FaderBank(
                         channelNumber = ch + 1,
                         activePlayback = activeTrack,
                         volume = volume,
+                        smoothingPercent = smoothingPercent,
                         onVolumeChange = { onFaderChange(ch, it) },
                         modifier = Modifier.weight(1f)
                     )
@@ -105,6 +104,7 @@ private fun FaderChannelStrip(
     channelNumber: Int,
     activePlayback: ActivePlayback?,
     volume: Float,
+    smoothingPercent: Int,
     onVolumeChange: (Float) -> Unit,
     modifier: Modifier = Modifier
 ) {
@@ -173,9 +173,10 @@ private fun FaderChannelStrip(
 
             Spacer(modifier = Modifier.height(4.dp))
 
-            // Tactile Vertical Fader
+            // Procreate StreamLine Tactile Vertical Fader
             TactileVerticalFader(
                 volume = volume,
+                smoothingPercent = smoothingPercent,
                 isAssigned = isAssigned,
                 accentColor = accentColor,
                 onVolumeChange = onVolumeChange,
@@ -212,16 +213,45 @@ private fun FaderChannelStrip(
 }
 
 /**
- * Custom tactile vertical fader track with smooth drag mechanics.
+ * Custom tactile vertical fader track with Procreate-style StreamLine smoothing.
+ * The fader cap glides smoothly following the finger with damped velocity,
+ * absorbing jitter and enabling effortless micro-fine tuning.
  */
 @Composable
 private fun TactileVerticalFader(
     volume: Float,
+    smoothingPercent: Int,
     isAssigned: Boolean,
     accentColor: Color,
     onVolumeChange: (Float) -> Unit,
     modifier: Modifier = Modifier
 ) {
+    // Target position driven directly by touch
+    var targetVol by remember(volume) { mutableStateOf(volume) }
+    // Smoothed visual & audio position trailing the target
+    var smoothedVol by remember(volume) { mutableStateOf(volume) }
+
+    // Procreate StreamLine Frame Loop
+    LaunchedEffect(targetVol, smoothingPercent) {
+        val streamLineFactor = (smoothingPercent / 100f).coerceIn(0f, 0.92f)
+        if (streamLineFactor <= 0.05f) {
+            // Direct instantaneous mode
+            smoothedVol = targetVol
+            onVolumeChange(targetVol)
+        } else {
+            // StreamLine delayed-following: moves fraction of distance each frame
+            val lerpRate = (1.0f - streamLineFactor).coerceIn(0.04f, 0.70f)
+            while (abs(targetVol - smoothedVol) > 0.002f) {
+                withFrameNanos {
+                    smoothedVol += (targetVol - smoothedVol) * lerpRate
+                }
+                onVolumeChange((smoothedVol * 100).roundToInt() / 100f)
+            }
+            smoothedVol = targetVol
+            onVolumeChange(targetVol)
+        }
+    }
+
     BoxWithConstraints(
         contentAlignment = Alignment.Center,
         modifier = modifier
@@ -230,12 +260,12 @@ private fun TactileVerticalFader(
         val faderCapHeight = 24.dp
         val travelHeight = totalHeight - faderCapHeight
 
-        // Calculate cap Y position: volume 0f = bottom, volume 1f = unity, 1.2f = top
-        val clampedVol = volume.coerceIn(0f, 1.25f)
+        // Fader cap Y is mapped directly to smoothedVol
+        val clampedVol = smoothedVol.coerceIn(0f, 1.25f)
         val normalized = clampedVol / 1.25f
         val capYOffset = travelHeight * (1f - normalized)
 
-        // Gesture detector on the whole track
+        // Gesture detector on the track
         Box(
             modifier = Modifier
                 .fillMaxSize()
@@ -244,8 +274,7 @@ private fun TactileVerticalFader(
                         val trackHeightPx = size.height.toFloat()
                         val touchY = offset.y.coerceIn(0f, trackHeightPx)
                         val newNormalized = (1f - (touchY / trackHeightPx)).coerceIn(0f, 1f)
-                        val newVol = newNormalized * 1.25f
-                        onVolumeChange((newVol * 100).roundToInt() / 100f)
+                        targetVol = newNormalized * 1.25f
                     }
                 }
                 .pointerInput(totalHeight) {
@@ -254,8 +283,7 @@ private fun TactileVerticalFader(
                         val trackHeightPx = size.height.toFloat()
                         val touchY = change.position.y.coerceIn(0f, trackHeightPx)
                         val newNormalized = (1f - (touchY / trackHeightPx)).coerceIn(0f, 1f)
-                        val newVol = newNormalized * 1.25f
-                        onVolumeChange((newVol * 100).roundToInt() / 100f)
+                        targetVol = newNormalized * 1.25f
                     }
                 }
         ) {

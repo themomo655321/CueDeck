@@ -5,6 +5,7 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.SystemUpdate
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -16,24 +17,18 @@ import androidx.compose.ui.unit.sp
 import com.cuedeck.model.AppSettings
 import com.cuedeck.ui.theme.DarkSurface
 import com.cuedeck.ui.theme.GoGreen
+import kotlin.math.roundToInt
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun SettingsModal(
     settings: AppSettings,
     onSaveSettings: (AppSettings) -> Unit,
+    onCheckForUpdates: () -> Unit = {},
     onDismiss: () -> Unit
 ) {
-    var faderSmoothingMs by remember { mutableStateOf(settings.faderSmoothingMs) }
+    var streamLinePercent by remember { mutableStateOf(settings.faderStreamLinePercent) }
     var panicFadeMs by remember { mutableStateOf(settings.panicFadeMs) }
-
-    val smoothingOptions = listOf(
-        0L to "Instant (0ms)",
-        50L to "Fast (50ms)",
-        150L to "Smooth (150ms)",
-        350L to "Slow (350ms)",
-        600L to "Cinematic (600ms)"
-    )
 
     ModalBottomSheet(
         onDismissRequest = onDismiss,
@@ -65,44 +60,58 @@ fun SettingsModal(
 
             Spacer(modifier = Modifier.height(16.dp))
 
-            // Fader Smoothing Section
+            // Procreate StreamLine Fader Smoothing
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween,
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Text(
+                    text = "Fader Smoothing (StreamLine)",
+                    fontSize = 14.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = Color.White
+                )
+                Text(
+                    text = "$streamLinePercent%",
+                    fontSize = 14.sp,
+                    fontWeight = FontWeight.Black,
+                    color = GoGreen
+                )
+            }
             Text(
-                text = "Fader Smoothing Speed",
-                fontSize = 14.sp,
-                fontWeight = FontWeight.Bold,
-                color = Color.White
-            )
-            Text(
-                text = "Controls volume interpolation to prevent zipper noise and audio clicks when riding the 4 live faders.",
+                text = "Fader cap glides behind your finger with smooth inertia (Procreate brush style), absorbing hand shake for ultra-fine volume tuning.",
                 fontSize = 12.sp,
                 color = Color.Gray,
                 modifier = Modifier.padding(vertical = 4.dp)
             )
 
-            Column(
-                verticalArrangement = Arrangement.spacedBy(6.dp),
-                modifier = Modifier.padding(vertical = 6.dp)
+            Slider(
+                value = streamLinePercent.toFloat(),
+                onValueChange = { streamLinePercent = it.roundToInt() },
+                valueRange = 0f..90f,
+                colors = SliderDefaults.colors(
+                    thumbColor = GoGreen,
+                    activeTrackColor = GoGreen
+                ),
+                modifier = Modifier.fillMaxWidth()
+            )
+
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(6.dp)
             ) {
-                smoothingOptions.forEach { (ms, label) ->
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(vertical = 2.dp)
-                    ) {
-                        RadioButton(
-                            selected = faderSmoothingMs == ms,
-                            onClick = { faderSmoothingMs = ms },
-                            colors = RadioButtonDefaults.colors(selectedColor = GoGreen)
-                        )
-                        Spacer(modifier = Modifier.width(6.dp))
-                        Text(
-                            text = label,
-                            fontSize = 14.sp,
-                            fontWeight = if (faderSmoothingMs == ms) FontWeight.Bold else FontWeight.Normal,
-                            color = if (faderSmoothingMs == ms) Color.White else Color.LightGray
-                        )
-                    }
+                listOf(
+                    0 to "Direct (0%)",
+                    35 to "Light (35%)",
+                    65 to "Medium (65%)",
+                    85 to "Heavy (85%)"
+                ).forEach { (pct, label) ->
+                    FilterChip(
+                        selected = streamLinePercent == pct,
+                        onClick = { streamLinePercent = pct },
+                        label = { Text(label, fontSize = 11.sp) }
+                    )
                 }
             }
 
@@ -136,14 +145,52 @@ fun SettingsModal(
                 )
             }
 
-            Spacer(modifier = Modifier.height(28.dp))
+            Divider(color = Color(0xFF2C2C2C), modifier = Modifier.padding(vertical = 12.dp))
+
+            // In-App Auto Update Section
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween,
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Column {
+                    Text(
+                        text = "App Updates",
+                        fontSize = 14.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = Color.White
+                    )
+                    Text(
+                        text = "Installed: v1.0.1",
+                        fontSize = 12.sp,
+                        color = Color.Gray
+                    )
+                }
+
+                OutlinedButton(
+                    onClick = {
+                        onCheckForUpdates()
+                    },
+                    shape = RoundedCornerShape(8.dp)
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.SystemUpdate,
+                        contentDescription = "Check for Updates",
+                        modifier = Modifier.size(16.dp)
+                    )
+                    Spacer(modifier = Modifier.width(6.dp))
+                    Text("Check for Update", fontSize = 12.sp)
+                }
+            }
+
+            Spacer(modifier = Modifier.height(24.dp))
 
             // Save Button
             Button(
                 onClick = {
                     onSaveSettings(
                         settings.copy(
-                            faderSmoothingMs = faderSmoothingMs,
+                            faderStreamLinePercent = streamLinePercent,
                             panicFadeMs = panicFadeMs
                         )
                     )

@@ -54,14 +54,16 @@ jobs:
         with:
           tag_name: v1.0.0-preview
           name: "CueDeck v1.0.0 Preview APK"
+          make_latest: true
           body: |
             ### 🎛️ CueDeck - Live Cue Trigger & Show Control
             Direct Android APK build for mobile & tablet testing (compatible with Android 11+ and ADVAN Sketsa 2).
             
-            #### How to Install on your Phone/Tablet:
-            1. Download `CueDeck-v1.0.0-debug.apk` below directly on your Android device.
-            2. Open the downloaded file and tap **Install** (allow "Install unknown apps" if prompted).
-            3. Enjoy low-latency live cue triggering!
+            #### What's New:
+            - **Procreate-Style StreamLine Fader Smoothing**: Faders trail the finger with damped glide speed, eliminating hand jitter for effortless micro-fine tuning.
+            - **Persistent Show Auto-Save**: Added cues and sound configurations are never lost when leaving or closing the app. Includes manual Save button with instant visual feedback.
+            - **Storage Bloat Protection**: Duplicate audio imports are automatically deduplicated and orphaned files are cleaned up on deletion.
+            - **In-App Auto-Update**: Checks GitHub for updates inside the app and installs them with a single tap.
           files: release_assets/CueDeck-v1.0.0-debug.apk
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

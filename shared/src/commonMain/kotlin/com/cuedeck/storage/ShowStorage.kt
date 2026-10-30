@@ -22,6 +22,10 @@ expect class PlatformStorage {
     fun readText(filePath: String): String?
     fun listShowIds(): List<String>
     fun deleteShow(showId: String)
+    fun saveLastActiveShowId(showId: String)
+    fun getLastActiveShowId(): String?
+    fun deleteAudioFile(showId: String, relativePath: String)
+    fun cleanupUnusedAudio(showId: String, activeRelativePaths: Set<String>)
 }
 
 class ShowRepository(private val platformStorage: PlatformStorage) {
@@ -37,6 +41,11 @@ class ShowRepository(private val platformStorage: PlatformStorage) {
         val dir = platformStorage.getShowDirectory(show.id)
         val jsonString = json.encodeToString(show)
         platformStorage.writeText("$dir/show.json", jsonString)
+        platformStorage.saveLastActiveShowId(show.id)
+
+        // Clean up any unreferenced audio files to prevent device storage bloat
+        val activeAudioPaths = show.cues.map { it.audioRelativePath }.toSet()
+        platformStorage.cleanupUnusedAudio(show.id, activeAudioPaths)
     }
 
     fun loadShow(showId: String): Show? {
@@ -48,6 +57,20 @@ class ShowRepository(private val platformStorage: PlatformStorage) {
             e.printStackTrace()
             null
         }
+    }
+
+    fun loadLastActiveShow(): Show? {
+        val lastId = platformStorage.getLastActiveShowId()
+        if (lastId != null) {
+            val show = loadShow(lastId)
+            if (show != null) return show
+        }
+        val allShows = listShows()
+        if (allShows.isNotEmpty()) {
+            val first = loadShow(allShows.first())
+            if (first != null) return first
+        }
+        return null
     }
 
     fun importAudioFile(showId: String, sourcePath: String, originalFileName: String): String {

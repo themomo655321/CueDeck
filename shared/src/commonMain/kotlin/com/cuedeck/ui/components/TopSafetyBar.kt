@@ -30,6 +30,8 @@ fun TopSafetyBar(
     onToggleLock: () -> Unit,
     onVolumeChange: (Float) -> Unit,
     onPanicStop: () -> Unit,
+    onSaveShow: () -> Unit = {},
+    saveFeedback: String? = null,
     onOpenSettings: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
@@ -46,7 +48,7 @@ fun TopSafetyBar(
                 horizontalArrangement = Arrangement.SpaceBetween,
                 modifier = Modifier.fillMaxWidth()
             ) {
-                // Show Title & Lock indicator
+                // Show Title & Lock indicator & Save button
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Text(
                         text = title,
@@ -54,12 +56,13 @@ fun TopSafetyBar(
                         fontWeight = FontWeight.Bold,
                         color = Color.White
                     )
-                    Spacer(modifier = Modifier.width(8.dp))
+                    Spacer(modifier = Modifier.width(6.dp))
+
                     // Performance Lock button
                     IconButton(
                         onClick = onToggleLock,
                         modifier = Modifier
-                            .size(36.dp)
+                            .size(34.dp)
                             .clip(RoundedCornerShape(8.dp))
                             .background(if (isPerformanceLocked) WarningAmber.copy(alpha = 0.2f) else Color.Transparent)
                     ) {
@@ -67,8 +70,39 @@ fun TopSafetyBar(
                             imageVector = if (isPerformanceLocked) Icons.Default.Lock else Icons.Default.LockOpen,
                             contentDescription = "Lock Performance",
                             tint = if (isPerformanceLocked) WarningAmber else Color.Gray,
-                            modifier = Modifier.size(20.dp)
+                            modifier = Modifier.size(18.dp)
                         )
+                    }
+
+                    // Save Show Button
+                    IconButton(
+                        onClick = onSaveShow,
+                        modifier = Modifier.size(34.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Save,
+                            contentDescription = "Save Show",
+                            tint = if (saveFeedback != null) Color(0xFF4CAF50) else Color.LightGray,
+                            modifier = Modifier.size(18.dp)
+                        )
+                    }
+
+                    // Save Feedback Toast Badge
+                    if (saveFeedback != null) {
+                        Spacer(modifier = Modifier.width(4.dp))
+                        Box(
+                            modifier = Modifier
+                                .clip(RoundedCornerShape(4.dp))
+                                .background(Color(0xFF2E7D32))
+                                .padding(horizontal = 6.dp, vertical = 2.dp)
+                        ) {
+                            Text(
+                                text = saveFeedback,
+                                fontSize = 10.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = Color.White
+                            )
+                        }
                     }
                 }
 

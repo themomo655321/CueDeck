@@ -16,6 +16,7 @@ import com.cuedeck.viewmodel.CueDeckViewModel
 fun MainScreen(
     viewModel: CueDeckViewModel,
     onImportAudioRequest: () -> Unit = {},
+    onCheckForUpdates: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     val show by viewModel.show.collectAsState()
@@ -23,6 +24,7 @@ fun MainScreen(
     val faderVolumes by viewModel.faderVolumes.collectAsState()
     val settings by viewModel.settings.collectAsState()
     val cartPageIndex by viewModel.cartPageIndex.collectAsState()
+    val saveFeedback by viewModel.saveFeedback.collectAsState()
 
     var editingCue by remember { mutableStateOf<Cue?>(null) }
     var assigningSlotIndex by remember { mutableStateOf<Int?>(null) }
@@ -38,7 +40,7 @@ fun MainScreen(
         val isWideScreen = maxWidth > 650.dp // Tablet or landscape orientation
 
         Column(modifier = Modifier.fillMaxSize()) {
-            // Persistent Top Safety Bar with Settings button
+            // Persistent Top Safety Bar with Save button & Settings button
             TopSafetyBar(
                 title = show.title,
                 viewMode = show.currentViewMode,
@@ -48,6 +50,8 @@ fun MainScreen(
                 onToggleLock = { viewModel.togglePerformanceLock() },
                 onVolumeChange = { viewModel.setMasterVolume(it) },
                 onPanicStop = { viewModel.panicStop() },
+                onSaveShow = { viewModel.saveCurrentShow(userInitiated = true) },
+                saveFeedback = saveFeedback,
                 onOpenSettings = { showSettingsModal = true }
             )
 
@@ -99,6 +103,7 @@ fun MainScreen(
                         FaderBank(
                             activePlaybacks = activePlaybacks,
                             faderVolumes = faderVolumes,
+                            smoothingPercent = settings.faderStreamLinePercent,
                             onFaderChange = { ch, vol -> viewModel.setFaderVolume(ch, vol) }
                         )
                     }
@@ -174,10 +179,11 @@ fun MainScreen(
                             }
                         }
 
-                        // 4 Channel Mixer Faders (Positioned exactly where user requested!)
+                        // 4 Channel Mixer Faders with Procreate StreamLine Smoothing!
                         FaderBank(
                             activePlaybacks = activePlaybacks,
                             faderVolumes = faderVolumes,
+                            smoothingPercent = settings.faderStreamLinePercent,
                             onFaderChange = { ch, vol -> viewModel.setFaderVolume(ch, vol) }
                         )
                     }
@@ -193,11 +199,12 @@ fun MainScreen(
         }
     }
 
-    // Modal: Settings & Fader Smoothing
+    // Modal: Settings, Fader StreamLine & Auto Updates
     if (showSettingsModal) {
         SettingsModal(
             settings = settings,
             onSaveSettings = { viewModel.updateSettings(it) },
+            onCheckForUpdates = onCheckForUpdates,
             onDismiss = { showSettingsModal = false }
         )
     }
