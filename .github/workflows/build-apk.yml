@@ -40,30 +40,36 @@ jobs:
       - name: Prepare APK Asset
         run: |
           mkdir -p release_assets
-          cp androidApp/build/outputs/apk/debug/androidApp-debug.apk release_assets/CueDeck-v1.0.0-debug.apk
+          cp androidApp/build/outputs/apk/debug/androidApp-debug.apk release_assets/CueDeck-v1.0.1-debug.apk
 
       - name: Upload APK as Workflow Artifact
         uses: actions/upload-artifact@v4
         with:
           name: CueDeck-debug-apk
-          path: release_assets/CueDeck-v1.0.0-debug.apk
+          path: release_assets/CueDeck-v1.0.1-debug.apk
           retention-days: 14
 
       - name: Create or Update GitHub Release
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: v1.0.0-preview
-          name: "CueDeck v1.0.0 Preview APK"
+          tag_name: v1.0.1
+          name: "CueDeck v1.0.1 Preview APK"
           make_latest: true
           body: |
-            ### 🎛️ CueDeck - Live Cue Trigger & Show Control
+            ### 🎛️ CueDeck v1.0.1 - Live Cue Trigger & Show Control
             Direct Android APK build for mobile & tablet testing (compatible with Android 11+ and ADVAN Sketsa 2).
             
-            #### What's New:
-            - **Procreate-Style StreamLine Fader Smoothing**: Faders trail the finger with damped glide speed, eliminating hand jitter for effortless micro-fine tuning.
-            - **Persistent Show Auto-Save**: Added cues and sound configurations are never lost when leaving or closing the app. Includes manual Save button with instant visual feedback.
-            - **Storage Bloat Protection**: Duplicate audio imports are automatically deduplicated and orphaned files are cleaned up on deletion.
-            - **In-App Auto-Update**: Checks GitHub for updates inside the app and installs them with a single tap.
-          files: release_assets/CueDeck-v1.0.0-debug.apk
+            #### 🛠️ Fixes in v1.0.1:
+            - **Fixed Package Parsing Error**: Corrected manifest schema and enabled v1 (JAR) + v2 signing schemes for seamless sideloading across all Android versions and OEM skins (MIUI, HyperOS, Stock Android).
+            - **Consistent App Keystore**: Solved signature mismatch issues to allow direct updates without needing to uninstall older builds.
+            
+            #### 🚀 Features:
+            - **Procreate-Style StreamLine Fader Smoothing**: Faders trail the finger with damped glide speed, eliminating hand jitter for effortless micro-fine tuning (configurable 0-90% in Settings).
+            - **4-Channel Live Fader Mixer**: Real-time level sliders for active playing sounds, available in both Cue Stack and Soundboard modes.
+            - **1x3 Compact Soundboard with Page Navigation**: `[ < PREV ]` and `[ NEXT > ]` paging controls to keep faders accessible.
+            - **Persistent Show Auto-Save**: Show state and cue configurations persist when switching apps.
+            - **Storage Bloat Protection**: Audio files are deduplicated and orphaned files are cleaned up on deletion.
+            - **In-App Auto-Update**: Checks GitHub and updates CueDeck with a single tap.
+          files: release_assets/CueDeck-v1.0.1-debug.apk
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

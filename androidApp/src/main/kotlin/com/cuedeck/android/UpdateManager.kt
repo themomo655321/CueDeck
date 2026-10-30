@@ -2,9 +2,13 @@ package com.cuedeck.android
 
 import android.content.Context
 import android.content.Intent
+import android.net.Uri
+import android.os.Build
+import android.provider.Settings
 import androidx.core.content.FileProvider
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import org.json.JSONArray
 import org.json.JSONObject
 import java.io.File
 import java.io.FileOutputStream
@@ -22,7 +26,7 @@ object UpdateManager {
 
     private const val PREFS_NAME = "cuedeck_update_prefs"
     private const val KEY_LAST_UPDATE_TIMESTAMP = "last_installed_updated_at"
-    private const val RELEASES_API_URL = "https://api.github.com/repos/themomo655321/CueDeck/releases/tags/v1.0.0-preview"
+    private const val RELEASES_API_URL = "https://api.github.com/repos/themomo655321/CueDeck/releases"
 
     suspend fun checkForUpdate(context: Context): UpdateInfo? = withContext(Dispatchers.IO) {
         try {
@@ -34,11 +38,17 @@ object UpdateManager {
 
             if (conn.responseCode != 200) return@withContext null
 
-            val jsonStr = conn.inputStream.bufferedReader().use { it.readText() }
-            val json = JSONObject(jsonStr)
+            val jsonStr = conn.inputStream.bufferedReader().use { it.readText() }.trim()
+            val releaseObj = if (jsonStr.startsWith("[")) {
+                val array = JSONArray(jsonStr)
+                if (array.length() == 0) return@withContext null
+                array.getJSONObject(0)
+            } else {
+                JSONObject(jsonStr)
+            }
 
-            val releaseName = json.optString("name", "CueDeck Update")
-            val assets = json.optJSONArray("assets") ?: return@withContext null
+            val releaseName = releaseObj.optString("name", "CueDeck Update")
+            val assets = releaseObj.optJSONArray("assets") ?: return@withContext null
 
             for (i in 0 until assets.length()) {
                 val asset = assets.getJSONObject(i)
@@ -106,9 +116,22 @@ object UpdateManager {
 
         // Launch Android System Package Installer
         withContext(Dispatchers.Main) {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                if (!context.packageManager.canRequestPackageInstalls()) {
+                    val settingsIntent = Intent(
+                        Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES,
+                        Uri.parse("package:${context.packageName}")
+                    ).apply {
+                        flags = Intent.FLAG_ACTIVITY_NEW_TASK
+                    }
+                    context.startActivity(settingsIntent)
+                    return@withContext
+                }
+            }
+
             val contentUri = FileProvider.getUriForFile(
                 context,
-                "${context.packageName}.fileprovider",
+                "com.cuedeck.app.fileprovider",
                 destinationApk
             )
 
