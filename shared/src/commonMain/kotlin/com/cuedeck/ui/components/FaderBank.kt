@@ -3,7 +3,8 @@ package com.cuedeck.ui.components
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
-import androidx.compose.foundation.gestures.detectDragGestures
+import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
@@ -17,6 +18,7 @@ import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
@@ -25,6 +27,7 @@ import androidx.compose.ui.unit.sp
 import com.cuedeck.model.ActivePlayback
 import com.cuedeck.ui.theme.DarkSurface
 import com.cuedeck.ui.theme.PanicRed
+import kotlinx.coroutines.flow.collectLatest
 import kotlin.math.abs
 import kotlin.math.roundToInt
 
@@ -163,12 +166,20 @@ private fun FaderChannelStrip(
                     .padding(vertical = 1.dp)
             )
 
-            // Volume readout (% or dB)
+            // Volume readout (% or dB) - tap or double-tap to reset to 100%
             Text(
                 text = if (volume <= 0.001f) "-inf" else "${(volume * 100).roundToInt()}%",
                 fontSize = 10.sp,
                 fontWeight = FontWeight.Black,
-                color = if (volume > 1.0f) Color(0xFFFFB300) else if (isAssigned) Color(0xFF4CAF50) else Color.LightGray
+                color = if (volume > 1.0f) Color(0xFFFFB300) else if (isAssigned) Color(0xFF4CAF50) else Color.LightGray,
+                modifier = Modifier
+                    .clip(RoundedCornerShape(3.dp))
+                    .pointerInput(Unit) {
+                        detectTapGestures(
+                            onTap = { onVolumeChange(1.0f) },
+                            onDoubleTap = { onVolumeChange(1.0f) }
+                        )
+                    }
             )
 
             Spacer(modifier = Modifier.height(4.dp))
@@ -214,8 +225,8 @@ private fun FaderChannelStrip(
 
 /**
  * Custom tactile vertical fader track with Procreate-style StreamLine smoothing.
- * The fader cap glides smoothly following the finger with damped velocity,
- * absorbing jitter and enabling effortless micro-fine tuning.
+ * Supports continuous bi-directional drag (up and down), single tap to jump,
+ * and double-tap to instantly reset back to 100% (Unity gain).
  */
 @Composable
 private fun TactileVerticalFader(
@@ -226,29 +237,55 @@ private fun TactileVerticalFader(
     onVolumeChange: (Float) -> Unit,
     modifier: Modifier = Modifier
 ) {
-    // Target position driven directly by touch
-    var targetVol by remember(volume) { mutableStateOf(volume) }
-    // Smoothed visual & audio position trailing the target
-    var smoothedVol by remember(volume) { mutableStateOf(volume) }
+    val density = LocalDensity.current
+    val faderCapHeight = 24.dp
+    val faderCapHeightPx = with(density) { faderCapHeight.toPx() }
 
-    // Procreate StreamLine Frame Loop
-    LaunchedEffect(targetVol, smoothingPercent) {
-        val streamLineFactor = (smoothingPercent / 100f).coerceIn(0f, 0.92f)
-        if (streamLineFactor <= 0.05f) {
-            // Direct instantaneous mode
-            smoothedVol = targetVol
-            onVolumeChange(targetVol)
-        } else {
-            // StreamLine delayed-following: moves fraction of distance each frame
-            val lerpRate = (1.0f - streamLineFactor).coerceIn(0.04f, 0.70f)
-            while (abs(targetVol - smoothedVol) > 0.002f) {
-                withFrameNanos {
-                    smoothedVol += (targetVol - smoothedVol) * lerpRate
-                }
-                onVolumeChange((smoothedVol * 100).roundToInt() / 100f)
+    // Target position driven directly by touch
+    var targetVol by remember { mutableFloatStateOf(volume) }
+    // Smoothed visual & audio position trailing the target with StreamLine inertia
+    var smoothedVol by remember { mutableFloatStateOf(volume) }
+    // Whether user is actively touching/dragging
+    var isDragging by remember { mutableStateOf(false) }
+
+    // Sync from external volume changes (e.g. MUTE button, show load, panic stop) when NOT dragging
+    LaunchedEffect(volume) {
+        if (!isDragging) {
+            targetVol = volume
+            if (abs(volume - smoothedVol) > 0.05f) {
+                smoothedVol = volume
             }
-            smoothedVol = targetVol
-            onVolumeChange(targetVol)
+        }
+    }
+
+    // StreamLine smoothing frame loop: runs continuously when target differs or while dragging
+    LaunchedEffect(smoothingPercent) {
+        var lastNotified = smoothedVol
+        snapshotFlow { targetVol to isDragging }.collectLatest { (target, dragging) ->
+            val factor = (smoothingPercent / 100f).coerceIn(0f, 0.90f)
+            if (factor <= 0.05f) {
+                smoothedVol = target
+                if (abs(smoothedVol - lastNotified) >= 0.002f || smoothedVol == target) {
+                    lastNotified = smoothedVol
+                    onVolumeChange((smoothedVol * 1000).roundToInt() / 1000f)
+                }
+            } else {
+                val rate = (1.0f - factor).coerceIn(0.05f, 0.65f)
+                while (abs(targetVol - smoothedVol) > 0.0005f || isDragging) {
+                    withFrameNanos {
+                        smoothedVol += (targetVol - smoothedVol) * rate
+                    }
+                    if (abs(smoothedVol - lastNotified) >= 0.002f || smoothedVol == targetVol) {
+                        lastNotified = smoothedVol
+                        onVolumeChange((smoothedVol * 1000).roundToInt() / 1000f)
+                    }
+                }
+                smoothedVol = targetVol
+                if (lastNotified != smoothedVol) {
+                    lastNotified = smoothedVol
+                    onVolumeChange((smoothedVol * 1000).roundToInt() / 1000f)
+                }
+            }
         }
     }
 
@@ -257,7 +294,6 @@ private fun TactileVerticalFader(
         modifier = modifier
     ) {
         val totalHeight = maxHeight
-        val faderCapHeight = 24.dp
         val travelHeight = totalHeight - faderCapHeight
 
         // Fader cap Y is mapped directly to smoothedVol
@@ -265,25 +301,59 @@ private fun TactileVerticalFader(
         val normalized = clampedVol / 1.25f
         val capYOffset = travelHeight * (1f - normalized)
 
-        // Gesture detector on the track
+        // Gesture detector on the track using unified pointer input
         Box(
             modifier = Modifier
                 .fillMaxSize()
-                .pointerInput(totalHeight) {
-                    detectTapGestures { offset ->
-                        val trackHeightPx = size.height.toFloat()
-                        val touchY = offset.y.coerceIn(0f, trackHeightPx)
-                        val newNormalized = (1f - (touchY / trackHeightPx)).coerceIn(0f, 1f)
-                        targetVol = newNormalized * 1.25f
-                    }
-                }
-                .pointerInput(totalHeight) {
-                    detectDragGestures { change, _ ->
-                        change.consume()
-                        val trackHeightPx = size.height.toFloat()
-                        val touchY = change.position.y.coerceIn(0f, trackHeightPx)
-                        val newNormalized = (1f - (touchY / trackHeightPx)).coerceIn(0f, 1f)
-                        targetVol = newNormalized * 1.25f
+                .pointerInput(faderCapHeightPx) {
+                    var lastTapTime = 0L
+                    var lastTapY = 0f
+
+                    awaitEachGesture {
+                        val down = awaitFirstDown(requireUnconsumed = false)
+                        val downTime = down.uptimeMillis
+                        val isDoubleTap = (downTime - lastTapTime) < 350L && abs(down.position.y - lastTapY) < 100f
+                        lastTapTime = downTime
+                        lastTapY = down.position.y
+
+                        if (isDoubleTap) {
+                            down.consume()
+                            // Double tap: reset to 100% (1.0f Unity gain)
+                            targetVol = 1.0f
+                            smoothedVol = 1.0f
+                            onVolumeChange(1.0f)
+                            // Wait until all touches lift
+                            while (true) {
+                                val event = awaitPointerEvent()
+                                val pointer = event.changes.firstOrNull { it.id == down.id } ?: break
+                                if (!pointer.pressed) break
+                                pointer.consume()
+                            }
+                            isDragging = false
+                            lastTapTime = 0L
+                            return@awaitEachGesture
+                        }
+
+                        // Touch / Drag handler
+                        isDragging = true
+                        val travelPx = (size.height.toFloat() - faderCapHeightPx).coerceAtLeast(1f)
+                        val capHalf = faderCapHeightPx / 2f
+                        val initialTop = (down.position.y - capHalf).coerceIn(0f, travelPx)
+                        targetVol = ((1f - (initialTop / travelPx)) * 1.25f).coerceIn(0f, 1.25f)
+
+                        // Track continuous movement up and down
+                        while (true) {
+                            val event = awaitPointerEvent()
+                            val pointer = event.changes.firstOrNull { it.id == down.id } ?: break
+                            if (!pointer.pressed) {
+                                isDragging = false
+                                break
+                            }
+                            pointer.consume()
+                            val curTop = (pointer.position.y - capHalf).coerceIn(0f, travelPx)
+                            targetVol = ((1f - (curTop / travelPx)) * 1.25f).coerceIn(0f, 1.25f)
+                        }
+                        isDragging = false
                     }
                 }
         ) {
@@ -298,15 +368,16 @@ private fun TactileVerticalFader(
                     .border(0.5.dp, Color(0xFF333333), RoundedCornerShape(2.dp))
             )
 
-            // Unity 0dB Marker Line (at ~80% height = 1.0 volume)
+            // Unity 0dB Marker Line (at 1.0 volume = 100%) - tap to snap to 100%
             val unityY = travelHeight * (1f - (1.0f / 1.25f)) + (faderCapHeight / 2)
             Box(
                 modifier = Modifier
-                    .width(18.dp)
-                    .height(1.dp)
-                    .offset(y = unityY)
+                    .width(22.dp)
+                    .height(3.dp)
+                    .offset(y = unityY - 1.5.dp)
                     .align(Alignment.TopCenter)
-                    .background(Color(0xFF555555))
+                    .clip(RoundedCornerShape(1.5.dp))
+                    .background(if (abs(volume - 1.0f) < 0.02f) Color(0xFF4CAF50) else Color(0xFF666666))
             )
 
             // Physical Tactile Fader Cap
@@ -314,7 +385,7 @@ private fun TactileVerticalFader(
                 modifier = Modifier
                     .offset(y = capYOffset)
                     .align(Alignment.TopCenter)
-                    .width(34.dp)
+                    .width(36.dp)
                     .height(faderCapHeight)
                     .shadow(elevation = 4.dp, shape = RoundedCornerShape(4.dp))
                     .clip(RoundedCornerShape(4.dp))
@@ -334,12 +405,13 @@ private fun TactileVerticalFader(
                     ),
                 contentAlignment = Alignment.Center
             ) {
-                // Fader Cap Center Indicator Stripe
+                // Fader Cap Center Indicator Stripe (glows green at 100% Unity gain)
+                val isUnity = abs(clampedVol - 1.0f) < 0.02f
                 Box(
                     modifier = Modifier
                         .fillMaxWidth(0.7f)
-                        .height(2.dp)
-                        .background(if (isAssigned) accentColor else Color.White)
+                        .height(2.5.dp)
+                        .background(if (isUnity) Color(0xFF4CAF50) else if (isAssigned) accentColor else Color.White)
                 )
             }
         }
