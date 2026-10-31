@@ -547,16 +547,10 @@ class CueDeckViewModel(
     }
 
     fun createNewShow(title: String = "New Show") {
-        val newShow = Show(
+        val newShow = createDefaultShow().copy(
             id = UUID.randomUUID().toString(),
             title = title,
-            cues = emptyList(),
-            cartBanks = listOf(defaultBank),
-            activeBankIndex = 0,
-            masterVolume = 1.0f,
-            armedCueId = null,
-            isPerformanceLocked = false,
-            currentViewMode = ViewMode.CUE_LIST
+            cues = emptyList()
         )
         repository.saveShow(newShow)
         _show.value = newShow
@@ -567,10 +561,12 @@ class CueDeckViewModel(
     fun loadShowById(showId: String) {
         val loaded = repository.loadShow(showId)
         if (loaded != null) {
-            audioEngine.stopAll(fadeOutMs = 0L)
-            _show.value = loaded
-            refreshSavedShows()
-            showSaveFeedback("Loaded: ${loaded.title} ✓")
+            coroutineScope.launch {
+                audioEngine.stopAll(fadeOutMs = 0L)
+                _show.value = loaded
+                refreshSavedShows()
+                showSaveFeedback("Loaded: ${loaded.title} ✓")
+            }
         } else {
             showUserError("Failed to load show")
         }
