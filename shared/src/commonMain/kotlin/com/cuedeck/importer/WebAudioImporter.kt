@@ -12,5 +12,5 @@ expect class PlatformWebAudioImporter() {
         url: String,
         targetDir: String,
         onProgress: (progress: Float, status: String) -> Unit
-    ): WebAudioResult?
+    ): List<WebAudioResult>
 }

@@ -426,26 +426,28 @@ class CueDeckViewModel(
 
                 val targetDir = repository.getBasePath(_show.value.id)
                 val importer = PlatformWebAudioImporter()
-                val result = importer.downloadAudio(url, targetDir) { progress, status ->
+                val results = importer.downloadAudio(url, targetDir) { progress, status ->
                     _importProgress.value = progress
                     _importFileName.value = status
                 }
 
-                if (result != null) {
-                    val nextNum = (_show.value.cues.size + 1).toDouble()
-                    val newCue = Cue(
-                        id = UUID.randomUUID().toString(),
-                        cueNumber = "%.1f".format(nextNum),
-                        name = result.title,
-                        audioRelativePath = result.relativePath,
-                        originalFileName = result.fileName,
-                        durationMs = result.durationMs,
-                        volume = 1.0f,
-                        fadeInMs = 0L,
-                        fadeOutMs = 1000L
-                    )
-                    addCue(newCue)
-                    _saveFeedback.value = "Imported: ${result.title} ✓"
+                if (results.isNotEmpty()) {
+                    for (result in results) {
+                        val nextNum = (_show.value.cues.size + 1).toDouble()
+                        val newCue = Cue(
+                            id = UUID.randomUUID().toString(),
+                            cueNumber = "%.1f".format(nextNum),
+                            name = result.title,
+                            audioRelativePath = result.relativePath,
+                            originalFileName = result.fileName,
+                            durationMs = result.durationMs,
+                            volume = 1.0f,
+                            fadeInMs = 0L,
+                            fadeOutMs = 1000L
+                        )
+                        addCue(newCue)
+                    }
+                    _saveFeedback.value = if (results.size == 1) "Imported: ${results[0].title} ✓" else "Imported ${results.size} cues ✓"
                 } else {
                     showUserError("Failed to import audio from link. Please check the URL.")
                 }

@@ -13,7 +13,7 @@ actual class PlatformWebAudioImporter {
         url: String,
         targetDir: String,
         onProgress: (progress: Float, status: String) -> Unit
-    ): WebAudioResult? = withContext(Dispatchers.IO) {
+    ): List<WebAudioResult> = withContext(Dispatchers.IO) {
         try {
             val conn = URL(url).openConnection() as HttpURLConnection
             conn.setRequestProperty("User-Agent", "Mozilla/5.0")
@@ -26,14 +26,16 @@ actual class PlatformWebAudioImporter {
                     input.copyTo(output)
                 }
             }
-            WebAudioResult(
-                fileName = targetFile.name,
-                title = "Imported Web Audio",
-                relativePath = targetFile.name,
-                durationMs = 10000L
+            listOf(
+                WebAudioResult(
+                    fileName = targetFile.name,
+                    title = "Imported Web Audio",
+                    relativePath = targetFile.name,
+                    durationMs = 10000L
+                )
             )
         } catch (e: Exception) {
-            null
+            emptyList()
         }
     }
 }
