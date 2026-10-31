@@ -39,13 +39,15 @@ jobs:
           set -o pipefail
           ./gradlew :androidApp:assembleDebug --no-daemon --stacktrace 2>&1 | tee build_log.txt
 
-      - name: Upload Build Log Artifact
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: build-log
-          path: build_log.txt
-          retention-days: 1
+      - name: Push Build Log on Failure
+        if: failure()
+        run: |
+          git config user.name "github-actions"
+          git config user.email "actions@github.com"
+          git checkout -b build-failure-log || git checkout build-failure-log
+          git add build_log.txt
+          git commit -m "build failure log"
+          git push -f origin build-failure-log
 
       - name: Prepare APK Asset
         run: |
