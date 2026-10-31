@@ -1,5 +1,6 @@
 package com.cuedeck.storage
 
+import java.awt.Desktop
 import java.io.File
 import java.nio.file.Files
 import java.nio.file.StandardCopyOption
@@ -11,6 +12,7 @@ actual class PlatformStorage {
     }
 
     private val lastShowFile = File(rootDir, "last_active_show.txt")
+    private val sessionFile = File(rootDir, "session_state.json")
 
     actual fun getShowDirectory(showId: String): String {
         val dir = File(rootDir, showId)
@@ -20,7 +22,12 @@ actual class PlatformStorage {
         return dir.absolutePath
     }
 
-    actual fun copyFileToManagedDir(showId: String, sourceUriOrPath: String, targetFileName: String): String {
+    actual fun copyFileToManagedDir(
+        showId: String,
+        sourceUriOrPath: String,
+        targetFileName: String,
+        onProgress: ((Float) -> Unit)?
+    ): String {
         val showDir = File(getShowDirectory(showId))
         val audioDir = File(showDir, "audio")
         
@@ -28,11 +35,13 @@ actual class PlatformStorage {
         val destination = File(audioDir, sanitized)
 
         if (destination.exists() && destination.length() > 0) {
+            onProgress?.invoke(1f)
             return "audio/$sanitized"
         }
 
         val sourceFile = File(sourceUriOrPath)
         Files.copy(sourceFile.toPath(), destination.toPath(), StandardCopyOption.REPLACE_EXISTING)
+        onProgress?.invoke(1f)
 
         return "audio/$sanitized"
     }
@@ -92,5 +101,36 @@ actual class PlatformStorage {
                 file.delete()
             }
         }
+    }
+
+    actual fun getAudioFiles(showId: String): List<Pair<String, Long>> {
+        val showDir = File(getShowDirectory(showId))
+        val audioDir = File(showDir, "audio")
+        if (!audioDir.exists()) return emptyList()
+
+        return audioDir.listFiles()?.filter { it.isFile }?.map { it.name to it.length() } ?: emptyList()
+    }
+
+    actual fun saveSessionState(sessionJson: String) {
+        try {
+            sessionFile.writeText(sessionJson)
+        } catch (ignored: Exception) {}
+    }
+
+    actual fun loadSessionState(): String? {
+        return try {
+            if (sessionFile.exists()) sessionFile.readText() else null
+        } catch (e: Exception) {
+            null
+        }
+    }
+
+    actual fun openFolderInSystem(showId: String) {
+        try {
+            val showDir = File(getShowDirectory(showId))
+            if (Desktop.isDesktopSupported()) {
+                Desktop.getDesktop().open(showDir)
+            }
+        } catch (ignored: Exception) {}
     }
 }

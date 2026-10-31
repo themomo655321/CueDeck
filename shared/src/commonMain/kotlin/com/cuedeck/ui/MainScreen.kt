@@ -1,15 +1,23 @@
 package com.cuedeck.ui
 
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import com.cuedeck.diagnostics.ErrorLogger
 import com.cuedeck.model.*
 import com.cuedeck.ui.components.*
 import com.cuedeck.ui.theme.DarkBackground
+import com.cuedeck.ui.theme.PanicRed
 import com.cuedeck.viewmodel.CueDeckViewModel
 
 @Composable
@@ -25,10 +33,17 @@ fun MainScreen(
     val settings by viewModel.settings.collectAsState()
     val cartPageIndex by viewModel.cartPageIndex.collectAsState()
     val saveFeedback by viewModel.saveFeedback.collectAsState()
+    val storageInspection by viewModel.storageInspection.collectAsState()
+    val importProgress by viewModel.importProgress.collectAsState()
+    val importFileName by viewModel.importFileName.collectAsState()
+    val userErrorMessage by viewModel.userErrorMessage.collectAsState()
+    val errorLogs by ErrorLogger.logs.collectAsState()
 
     var editingCue by remember { mutableStateOf<Cue?>(null) }
     var assigningSlotIndex by remember { mutableStateOf<Int?>(null) }
     var showSettingsModal by remember { mutableStateOf(false) }
+    var showStorageModal by remember { mutableStateOf(false) }
+    var showDiagnosticsModal by remember { mutableStateOf(false) }
 
     val armedCue = show.findCue(show.armedCueId) ?: show.cues.firstOrNull()
 
@@ -54,6 +69,27 @@ fun MainScreen(
                 saveFeedback = saveFeedback,
                 onOpenSettings = { showSettingsModal = true }
             )
+
+            // User Error Banner
+            AnimatedVisibility(
+                visible = userErrorMessage != null,
+                enter = fadeIn(),
+                exit = fadeOut()
+            ) {
+                Surface(
+                    color = PanicRed,
+                    modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 4.dp),
+                    shape = RoundedCornerShape(6.dp)
+                ) {
+                    Text(
+                        text = userErrorMessage ?: "",
+                        color = Color.White,
+                        fontSize = 12.sp,
+                        fontWeight = FontWeight.Bold,
+                        modifier = Modifier.padding(8.dp)
+                    )
+                }
+            }
 
             if (isWideScreen) {
                 // Tablet Dual-Pane Layout (ADVAN Sketsa 2 10.1" landscape / desktop)
@@ -103,7 +139,8 @@ fun MainScreen(
                         FaderBank(
                             activePlaybacks = activePlaybacks,
                             faderVolumes = faderVolumes,
-                            smoothingPercent = settings.faderStreamLinePercent,
+                            fineModeEnabled = settings.fineModeEnabled,
+                            onFineModeToggle = { viewModel.updateSettings(settings.copy(fineModeEnabled = it)) },
                             onFaderChange = { ch, vol -> viewModel.setFaderVolume(ch, vol) }
                         )
                     }
@@ -128,7 +165,7 @@ fun MainScreen(
                     }
                 }
             } else {
-                // Mobile Portrait Layout (Phone - exactly as drawn in screenshot!)
+                // Mobile Portrait Layout (Phone)
                 Column(
                     modifier = Modifier
                         .fillMaxSize()
@@ -179,11 +216,12 @@ fun MainScreen(
                             }
                         }
 
-                        // 4 Channel Mixer Faders with Procreate StreamLine Smoothing!
+                        // 4 Channel Mixer Faders
                         FaderBank(
                             activePlaybacks = activePlaybacks,
                             faderVolumes = faderVolumes,
-                            smoothingPercent = settings.faderStreamLinePercent,
+                            fineModeEnabled = settings.fineModeEnabled,
+                            onFineModeToggle = { viewModel.updateSettings(settings.copy(fineModeEnabled = it)) },
                             onFaderChange = { ch, vol -> viewModel.setFaderVolume(ch, vol) }
                         )
                     }
@@ -199,13 +237,65 @@ fun MainScreen(
         }
     }
 
-    // Modal: Settings, Fader StreamLine & Auto Updates
+    // Modal: Settings & Updates
     if (showSettingsModal) {
         SettingsModal(
             settings = settings,
             onSaveSettings = { viewModel.updateSettings(it) },
+            onOpenStorageInspector = {
+                viewModel.inspectCurrentStorage()
+                showStorageModal = true
+            },
+            onOpenDiagnostics = {
+                showDiagnosticsModal = true
+            },
             onCheckForUpdates = onCheckForUpdates,
             onDismiss = { showSettingsModal = false }
+        )
+    }
+
+    // Modal: Project Storage Bloat Inspector
+    if (showStorageModal) {
+        StorageInspectorModal(
+            inspection = storageInspection,
+            onPurgeUnused = { viewModel.purgeUnusedAudio() },
+            onOpenInSystem = { viewModel.openStorageFolder() },
+            onDismiss = { showStorageModal = false }
+        )
+    }
+
+    // Modal: Diagnostics & Error Logs
+    if (showDiagnosticsModal) {
+        DiagnosticsModal(
+            logs = errorLogs,
+            onClear = { ErrorLogger.clear() },
+            onDismiss = { showDiagnosticsModal = false }
+        )
+    }
+
+    // Dialog: Cloud / Drive Audio Download Progress Bar
+    if (importProgress != null) {
+        AlertDialog(
+            onDismissRequest = {},
+            title = { Text("Importing Audio File...") },
+            text = {
+                Column {
+                    Text(
+                        text = importFileName ?: "Streaming file from Drive / storage...",
+                        fontSize = 12.sp,
+                        color = Color.LightGray
+                    )
+                    Spacer(modifier = Modifier.height(12.dp))
+                    val pct = ((importProgress ?: 0f) * 100).toInt()
+                    Text("Progress: $pct%", fontSize = 11.sp, color = Color(0xFF00E5FF))
+                    Spacer(modifier = Modifier.height(6.dp))
+                    LinearProgressIndicator(
+                        progress = { (importProgress ?: 0f).coerceIn(0f, 1f) },
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                }
+            },
+            confirmButton = {}
         )
     }
 

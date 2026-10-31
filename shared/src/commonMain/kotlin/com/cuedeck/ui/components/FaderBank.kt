@@ -1,8 +1,11 @@
 package com.cuedeck.ui.components
 
-import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.gestures.detectTapGestures
@@ -27,22 +30,27 @@ import androidx.compose.ui.unit.sp
 import com.cuedeck.model.ActivePlayback
 import com.cuedeck.ui.theme.DarkSurface
 import com.cuedeck.ui.theme.PanicRed
-import kotlinx.coroutines.flow.collectLatest
 import kotlin.math.abs
 import kotlin.math.roundToInt
 
 /**
- * 4-Channel Live Audio Fader Console with Procreate-Style StreamLine Smoothing.
- * Directly maps each fader to the active sounding cues in sequence.
+ * 4-Channel Live Audio Fader Console with Triple Fine-Tuning:
+ * 1. [FINE] Mode Gear-Ratio Toggle (Option A)
+ * 2. [+] and [−] Nudge Stepper Buttons (Option B)
+ * 3. Horizontal-to-Fine Dynamic Scrubbing (Option C)
+ * 4. Double-Tap Reset to 100% (Unity gain)
  */
 @Composable
 fun FaderBank(
     activePlaybacks: List<ActivePlayback>,
     faderVolumes: List<Float>,
-    smoothingPercent: Int = 65,
+    fineModeEnabled: Boolean = false,
+    onFineModeToggle: (Boolean) -> Unit = {},
     onFaderChange: (channelIndex: Int, volume: Float) -> Unit,
     modifier: Modifier = Modifier
 ) {
+    var localFineMode by remember(fineModeEnabled) { mutableStateOf(fineModeEnabled) }
+
     Surface(
         color = DarkSurface,
         shape = RoundedCornerShape(12.dp),
@@ -54,21 +62,44 @@ fun FaderBank(
         Column(
             modifier = Modifier.padding(horizontal = 8.dp, vertical = 6.dp)
         ) {
-            // Header
+            // Header Bar
             Row(
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.SpaceBetween,
                 modifier = Modifier.fillMaxWidth().padding(horizontal = 4.dp, vertical = 2.dp)
             ) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text(
+                        text = "LIVE MIXER",
+                        fontSize = 11.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = Color.Gray,
+                        letterSpacing = 1.sp
+                    )
+                    Spacer(modifier = Modifier.width(8.dp))
+
+                    // Option A: [FINE] Mode Toggle Button
+                    Box(
+                        modifier = Modifier
+                            .clip(RoundedCornerShape(4.dp))
+                            .background(if (localFineMode) Color(0xFF00E5FF) else Color(0xFF282828))
+                            .clickable {
+                                localFineMode = !localFineMode
+                                onFineModeToggle(localFineMode)
+                            }
+                            .padding(horizontal = 6.dp, vertical = 2.dp)
+                    ) {
+                        Text(
+                            text = if (localFineMode) "FINE 4X ON" else "FINE OFF",
+                            fontSize = 9.sp,
+                            fontWeight = FontWeight.Black,
+                            color = if (localFineMode) Color.Black else Color.LightGray
+                        )
+                    }
+                }
+
                 Text(
-                    text = "LIVE MIXER (4 CHANNELS)",
-                    fontSize = 11.sp,
-                    fontWeight = FontWeight.Bold,
-                    color = Color.Gray,
-                    letterSpacing = 1.sp
-                )
-                Text(
-                    text = "SMOOTH: ${smoothingPercent}% • ACTIVE: ${activePlaybacks.size.coerceAtMost(4)}/4",
+                    text = "ACTIVE: ${activePlaybacks.size.coerceAtMost(4)}/4",
                     fontSize = 10.sp,
                     fontWeight = FontWeight.SemiBold,
                     color = if (activePlaybacks.isNotEmpty()) Color(0xFF4CAF50) else Color(0xFF777777)
@@ -92,7 +123,7 @@ fun FaderBank(
                         channelNumber = ch + 1,
                         activePlayback = activeTrack,
                         volume = volume,
-                        smoothingPercent = smoothingPercent,
+                        isFineMode = localFineMode,
                         onVolumeChange = { onFaderChange(ch, it) },
                         modifier = Modifier.weight(1f)
                     )
@@ -107,7 +138,7 @@ private fun FaderChannelStrip(
     channelNumber: Int,
     activePlayback: ActivePlayback?,
     volume: Float,
-    smoothingPercent: Int,
+    isFineMode: Boolean,
     onVolumeChange: (Float) -> Unit,
     modifier: Modifier = Modifier
 ) {
@@ -131,7 +162,7 @@ private fun FaderChannelStrip(
                 .fillMaxSize()
                 .padding(horizontal = 4.dp, vertical = 6.dp)
         ) {
-            // Channel Pill & Title
+            // Channel Header Pill
             Row(
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.Center,
@@ -166,28 +197,65 @@ private fun FaderChannelStrip(
                     .padding(vertical = 1.dp)
             )
 
-            // Volume readout (% or dB) - tap or double-tap to reset to 100%
-            Text(
-                text = if (volume <= 0.001f) "-inf" else "${(volume * 100).roundToInt()}%",
-                fontSize = 10.sp,
-                fontWeight = FontWeight.Black,
-                color = if (volume > 1.0f) Color(0xFFFFB300) else if (isAssigned) Color(0xFF4CAF50) else Color.LightGray,
-                modifier = Modifier
-                    .clip(RoundedCornerShape(3.dp))
-                    .pointerInput(Unit) {
-                        detectTapGestures(
-                            onTap = { onVolumeChange(1.0f) },
-                            onDoubleTap = { onVolumeChange(1.0f) }
-                        )
-                    }
-            )
+            // Option B: Nudge Steppers & Percentage Readout
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween,
+                modifier = Modifier.fillMaxWidth().padding(horizontal = 1.dp, vertical = 1.dp)
+            ) {
+                // [ - ] Nudge 1% Button
+                Box(
+                    contentAlignment = Alignment.Center,
+                    modifier = Modifier
+                        .size(17.dp)
+                        .clip(RoundedCornerShape(3.dp))
+                        .background(Color(0xFF2A2A2A))
+                        .clickable {
+                            val newVol = ((volume - 0.01f) * 100).roundToInt() / 100f
+                            onVolumeChange(newVol.coerceIn(0f, 1.25f))
+                        }
+                ) {
+                    Text("−", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = Color.White)
+                }
+
+                // Volume readout (% or dB) - tap or double-tap to reset to 100%
+                Text(
+                    text = if (volume <= 0.001f) "-inf" else "${(volume * 100).roundToInt()}%",
+                    fontSize = 10.sp,
+                    fontWeight = FontWeight.Black,
+                    color = if (volume > 1.0f) Color(0xFFFFB300) else if (isAssigned) Color(0xFF4CAF50) else Color.LightGray,
+                    modifier = Modifier
+                        .clip(RoundedCornerShape(3.dp))
+                        .pointerInput(Unit) {
+                            detectTapGestures(
+                                onTap = { onVolumeChange(1.0f) },
+                                onDoubleTap = { onVolumeChange(1.0f) }
+                            )
+                        }
+                )
+
+                // [ + ] Nudge 1% Button
+                Box(
+                    contentAlignment = Alignment.Center,
+                    modifier = Modifier
+                        .size(17.dp)
+                        .clip(RoundedCornerShape(3.dp))
+                        .background(Color(0xFF2A2A2A))
+                        .clickable {
+                            val newVol = ((volume + 0.01f) * 100).roundToInt() / 100f
+                            onVolumeChange(newVol.coerceIn(0f, 1.25f))
+                        }
+                ) {
+                    Text("+", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = Color.White)
+                }
+            }
 
             Spacer(modifier = Modifier.height(4.dp))
 
-            // Procreate StreamLine Tactile Vertical Fader
+            // Vertical Tactile Fader Track
             TactileVerticalFader(
                 volume = volume,
-                smoothingPercent = smoothingPercent,
+                isFineMode = isFineMode,
                 isAssigned = isAssigned,
                 accentColor = accentColor,
                 onVolumeChange = onVolumeChange,
@@ -206,10 +274,8 @@ private fun FaderChannelStrip(
                     .height(20.dp)
                     .clip(RoundedCornerShape(4.dp))
                     .background(if (volume <= 0.001f) PanicRed else Color(0xFF282828))
-                    .pointerInput(Unit) {
-                        detectTapGestures {
-                            if (volume > 0f) onVolumeChange(0f) else onVolumeChange(1.0f)
-                        }
+                    .clickable {
+                        if (volume > 0f) onVolumeChange(0f) else onVolumeChange(1.0f)
                     }
             ) {
                 Text(
@@ -224,14 +290,17 @@ private fun FaderChannelStrip(
 }
 
 /**
- * Custom tactile vertical fader track with Procreate-style StreamLine smoothing.
- * Supports continuous bi-directional drag (up and down), single tap to jump,
- * and double-tap to instantly reset back to 100% (Unity gain).
+ * Custom tactile vertical fader track.
+ * Supports:
+ * - Option A: [FINE] Mode Gear-Ratio Toggle (4x slower).
+ * - Option C: Horizontal-to-Fine scrubbing with visual indicator badge.
+ * - Double-Tap Reset to 100% (Unity 0dB).
+ * - Immediate physical tracking up & down without sticking.
  */
 @Composable
 private fun TactileVerticalFader(
     volume: Float,
-    smoothingPercent: Int,
+    isFineMode: Boolean,
     isAssigned: Boolean,
     accentColor: Color,
     onVolumeChange: (Float) -> Unit,
@@ -241,52 +310,11 @@ private fun TactileVerticalFader(
     val faderCapHeight = 24.dp
     val faderCapHeightPx = with(density) { faderCapHeight.toPx() }
 
-    // Target position driven directly by touch
-    var targetVol by remember { mutableFloatStateOf(volume) }
-    // Smoothed visual & audio position trailing the target with StreamLine inertia
-    var smoothedVol by remember { mutableFloatStateOf(volume) }
-    // Whether user is actively touching/dragging
-    var isDragging by remember { mutableStateOf(false) }
+    var currentDisplayVol by remember { mutableFloatStateOf(volume) }
+    var isScrubbingFine by remember { mutableStateOf(false) }
 
-    // Sync from external volume changes (e.g. MUTE button, show load, panic stop) when NOT dragging
     LaunchedEffect(volume) {
-        if (!isDragging) {
-            targetVol = volume
-            if (abs(volume - smoothedVol) > 0.05f) {
-                smoothedVol = volume
-            }
-        }
-    }
-
-    // StreamLine smoothing frame loop: runs continuously when target differs or while dragging
-    LaunchedEffect(smoothingPercent) {
-        var lastNotified = smoothedVol
-        snapshotFlow { targetVol to isDragging }.collectLatest { (target, dragging) ->
-            val factor = (smoothingPercent / 100f).coerceIn(0f, 0.90f)
-            if (factor <= 0.05f) {
-                smoothedVol = target
-                if (abs(smoothedVol - lastNotified) >= 0.002f || smoothedVol == target) {
-                    lastNotified = smoothedVol
-                    onVolumeChange((smoothedVol * 1000).roundToInt() / 1000f)
-                }
-            } else {
-                val rate = (1.0f - factor).coerceIn(0.05f, 0.65f)
-                while (abs(targetVol - smoothedVol) > 0.0005f || isDragging) {
-                    withFrameNanos {
-                        smoothedVol += (targetVol - smoothedVol) * rate
-                    }
-                    if (abs(smoothedVol - lastNotified) >= 0.002f || smoothedVol == targetVol) {
-                        lastNotified = smoothedVol
-                        onVolumeChange((smoothedVol * 1000).roundToInt() / 1000f)
-                    }
-                }
-                smoothedVol = targetVol
-                if (lastNotified != smoothedVol) {
-                    lastNotified = smoothedVol
-                    onVolumeChange((smoothedVol * 1000).roundToInt() / 1000f)
-                }
-            }
-        }
+        currentDisplayVol = volume
     }
 
     BoxWithConstraints(
@@ -296,16 +324,14 @@ private fun TactileVerticalFader(
         val totalHeight = maxHeight
         val travelHeight = totalHeight - faderCapHeight
 
-        // Fader cap Y is mapped directly to smoothedVol
-        val clampedVol = smoothedVol.coerceIn(0f, 1.25f)
+        val clampedVol = currentDisplayVol.coerceIn(0f, 1.25f)
         val normalized = clampedVol / 1.25f
         val capYOffset = travelHeight * (1f - normalized)
 
-        // Gesture detector on the track using unified pointer input
         Box(
             modifier = Modifier
                 .fillMaxSize()
-                .pointerInput(faderCapHeightPx) {
+                .pointerInput(faderCapHeightPx, isFineMode) {
                     var lastTapTime = 0L
                     var lastTapY = 0f
 
@@ -318,42 +344,56 @@ private fun TactileVerticalFader(
 
                         if (isDoubleTap) {
                             down.consume()
-                            // Double tap: reset to 100% (1.0f Unity gain)
-                            targetVol = 1.0f
-                            smoothedVol = 1.0f
+                            // Double tap resets instantly to 100% (1.0f)
+                            currentDisplayVol = 1.0f
                             onVolumeChange(1.0f)
-                            // Wait until all touches lift
                             while (true) {
                                 val event = awaitPointerEvent()
                                 val pointer = event.changes.firstOrNull { it.id == down.id } ?: break
                                 if (!pointer.pressed) break
                                 pointer.consume()
                             }
-                            isDragging = false
                             lastTapTime = 0L
                             return@awaitEachGesture
                         }
 
-                        // Touch / Drag handler
-                        isDragging = true
+                        // Start continuous tracking
+                        val startX = down.position.x
+                        var lastY = down.position.y
                         val travelPx = (size.height.toFloat() - faderCapHeightPx).coerceAtLeast(1f)
-                        val capHalf = faderCapHeightPx / 2f
-                        val initialTop = (down.position.y - capHalf).coerceIn(0f, travelPx)
-                        targetVol = ((1f - (initialTop / travelPx)) * 1.25f).coerceIn(0f, 1.25f)
 
-                        // Track continuous movement up and down
                         while (true) {
                             val event = awaitPointerEvent()
                             val pointer = event.changes.firstOrNull { it.id == down.id } ?: break
                             if (!pointer.pressed) {
-                                isDragging = false
+                                isScrubbingFine = false
                                 break
                             }
                             pointer.consume()
-                            val curTop = (pointer.position.y - capHalf).coerceIn(0f, travelPx)
-                            targetVol = ((1f - (curTop / travelPx)) * 1.25f).coerceIn(0f, 1.25f)
+
+                            val currentY = pointer.position.y
+                            val currentX = pointer.position.x
+                            val deltaY = currentY - lastY
+                            lastY = currentY
+
+                            // Option C: Horizontal distance slows down vertical speed
+                            val horizontalDistance = abs(currentX - startX)
+                            val horizontalDivisor = if (horizontalDistance > 20f) {
+                                (1.0f + (horizontalDistance / 15f)).coerceIn(1f, 8f)
+                            } else {
+                                1.0f
+                            }
+
+                            // Option A: [FINE] mode forces 4x precision gear ratio
+                            val divisor = if (isFineMode) 4.0f else horizontalDivisor
+                            isScrubbingFine = divisor >= 2.0f
+
+                            // Upward drag (negative deltaY) increases volume
+                            val deltaVol = -(deltaY / travelPx) * 1.25f / divisor
+                            currentDisplayVol = (currentDisplayVol + deltaVol).coerceIn(0f, 1.25f)
+                            onVolumeChange((currentDisplayVol * 1000).roundToInt() / 1000f)
                         }
-                        isDragging = false
+                        isScrubbingFine = false
                     }
                 }
         ) {
@@ -368,7 +408,7 @@ private fun TactileVerticalFader(
                     .border(0.5.dp, Color(0xFF333333), RoundedCornerShape(2.dp))
             )
 
-            // Unity 0dB Marker Line (at 1.0 volume = 100%) - tap to snap to 100%
+            // Unity 0dB Marker Line (at 1.0 volume = 100%)
             val unityY = travelHeight * (1f - (1.0f / 1.25f)) + (faderCapHeight / 2)
             Box(
                 modifier = Modifier
@@ -377,8 +417,25 @@ private fun TactileVerticalFader(
                     .offset(y = unityY - 1.5.dp)
                     .align(Alignment.TopCenter)
                     .clip(RoundedCornerShape(1.5.dp))
-                    .background(if (abs(volume - 1.0f) < 0.02f) Color(0xFF4CAF50) else Color(0xFF666666))
+                    .background(if (abs(clampedVol - 1.0f) < 0.02f) Color(0xFF4CAF50) else Color(0xFF666666))
             )
+
+            // Floating "FINE" Badge when Option C scrub is active
+            AnimatedVisibility(
+                visible = isScrubbingFine,
+                enter = fadeIn(),
+                exit = fadeOut(),
+                modifier = Modifier.align(Alignment.TopCenter)
+            ) {
+                Box(
+                    modifier = Modifier
+                        .clip(RoundedCornerShape(3.dp))
+                        .background(Color(0xFF00E5FF))
+                        .padding(horizontal = 4.dp, vertical = 1.dp)
+                ) {
+                    Text("FINE", fontSize = 8.sp, fontWeight = FontWeight.Black, color = Color.Black)
+                }
+            }
 
             // Physical Tactile Fader Cap
             Box(
@@ -405,7 +462,6 @@ private fun TactileVerticalFader(
                     ),
                 contentAlignment = Alignment.Center
             ) {
-                // Fader Cap Center Indicator Stripe (glows green at 100% Unity gain)
                 val isUnity = abs(clampedVol - 1.0f) < 0.02f
                 Box(
                     modifier = Modifier

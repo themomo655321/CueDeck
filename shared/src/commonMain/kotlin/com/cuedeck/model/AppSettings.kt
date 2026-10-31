@@ -4,7 +4,11 @@ import kotlinx.serialization.Serializable
 
 @Serializable
 data class AppSettings(
-    val faderStreamLinePercent: Int = 65, // 0 = Direct, 35 = Light, 65 = Medium/Procreate, 85 = Heavy
-    val faderSmoothingMs: Long = 100L,
-    val panicFadeMs: Long = 0L
+    val fineModeEnabled: Boolean = false,
+    val fineTuneRatio: Float = 4.0f, // 2x, 4x, or 8x slower
+    val volumeButtonsTriggerGo: Boolean = false, // When ON: Vol UP = GO, Vol DOWN = Panic
+    val keepScreenAwake: Boolean = true, // FLAG_KEEP_SCREEN_ON during shows
+    val hapticFeedbackEnabled: Boolean = true, // Tactile click on GO/Panic/Triggers
+    val panicFadeMs: Long = 0L,
+    val faderSmoothingMs: Long = 100L
 )

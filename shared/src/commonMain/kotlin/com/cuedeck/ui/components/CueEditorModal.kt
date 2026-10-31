@@ -121,26 +121,17 @@ fun CueEditorModal(
 
             Spacer(modifier = Modifier.height(16.dp))
 
-            // Non-Destructive Trimming Sliders
+            // Non-Destructive Audio Trimming Waveform
             Text("Non-Destructive Trimming", fontWeight = FontWeight.Bold, fontSize = 13.sp, color = Color.LightGray)
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Text("In: %.1fs".format(inPointSec), fontSize = 12.sp, color = Color.Gray, modifier = Modifier.width(60.dp))
-                Slider(
-                    value = inPointSec,
-                    onValueChange = { inPointSec = it.coerceAtMost(outPointSec - 0.1f) },
-                    valueRange = 0f..totalDurationSec,
-                    modifier = Modifier.weight(1f)
-                )
-            }
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Text("Out: %.1fs".format(outPointSec), fontSize = 12.sp, color = Color.Gray, modifier = Modifier.width(60.dp))
-                Slider(
-                    value = outPointSec,
-                    onValueChange = { outPointSec = it.coerceAtLeast(inPointSec + 0.1f) },
-                    valueRange = 0f..totalDurationSec,
-                    modifier = Modifier.weight(1f)
-                )
-            }
+            Spacer(modifier = Modifier.height(4.dp))
+            WaveformTrimView(
+                cueId = cue.id,
+                inPointSec = inPointSec,
+                outPointSec = outPointSec,
+                totalDurationSec = totalDurationSec,
+                onInPointChange = { inPointSec = it },
+                onOutPointChange = { outPointSec = it }
+            )
 
             Spacer(modifier = Modifier.height(12.dp))
 

@@ -1,11 +1,14 @@
 package com.cuedeck.viewmodel
 
+import com.cuedeck.audio.AndroidAudioEngine
 import com.cuedeck.audio.AudioEngine
+import com.cuedeck.diagnostics.ErrorLogger
 import com.cuedeck.model.*
+import com.cuedeck.storage.SessionState
 import com.cuedeck.storage.ShowRepository
+import com.cuedeck.storage.StorageInspection
 import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.*
-import java.util.UUID
 
 class CueDeckViewModel(
     private val repository: ShowRepository,
@@ -24,20 +27,53 @@ class CueDeckViewModel(
     private val _faderVolumes = MutableStateFlow(listOf(1.0f, 1.0f, 1.0f, 1.0f))
     val faderVolumes: StateFlow<List<Float>> = _faderVolumes.asStateFlow()
 
+    private val _activeTab = MutableStateFlow(0) // 0 = Cue Stack, 1 = Soundboard
+    val activeTab: StateFlow<Int> = _activeTab.asStateFlow()
+
     private val _cartPageIndex = MutableStateFlow(0)
     val cartPageIndex: StateFlow<Int> = _cartPageIndex.asStateFlow()
 
     private val _saveFeedback = MutableStateFlow<String?>(null)
     val saveFeedback: StateFlow<String?> = _saveFeedback.asStateFlow()
 
+    private val _storageInspection = MutableStateFlow<StorageInspection?>(null)
+    val storageInspection: StateFlow<StorageInspection?> = _storageInspection.asStateFlow()
+
+    private val _importProgress = MutableStateFlow<Float?>(null)
+    val importProgress: StateFlow<Float?> = _importProgress.asStateFlow()
+
+    private val _importFileName = MutableStateFlow<String?>(null)
+    val importFileName: StateFlow<String?> = _importFileName.asStateFlow()
+
+    private val _userErrorMessage = MutableStateFlow<String?>(null)
+    val userErrorMessage: StateFlow<String?> = _userErrorMessage.asStateFlow()
+
     init {
         loadInitialShow()
+        restoreSessionState()
 
         // Auto-follow event listener
         coroutineScope.launch {
             audioEngine.playbackCompletedEvents.collect { completedCue ->
                 handlePlaybackCompleted(completedCue)
             }
+        }
+
+        // Auto-preload armed cue for zero latency
+        coroutineScope.launch {
+            _show.collect { currentShow ->
+                val armed = currentShow.findCue(currentShow.armedCueId) ?: currentShow.cues.firstOrNull()
+                if (armed != null) {
+                    preloadArmedCue(armed, currentShow.id)
+                }
+            }
+        }
+    }
+
+    private fun preloadArmedCue(cue: Cue, showId: String) {
+        if (audioEngine is AndroidAudioEngine) {
+            val basePath = repository.getBasePath(showId)
+            audioEngine.preload(cue, basePath)
         }
     }
 
@@ -73,6 +109,10 @@ class CueDeckViewModel(
         )
     }
 
+    fun setActiveTab(tab: Int) {
+        _activeTab.value = tab
+    }
+
     /**
      * Big GO button pressed (QLab sequential trigger)
      */
@@ -83,25 +123,33 @@ class CueDeckViewModel(
         val armedCue = currentShow.findCue(currentShow.armedCueId) ?: currentShow.cues.first()
 
         coroutineScope.launch {
-            // Pre-wait delay if configured
-            if (armedCue.preWaitMs > 0) {
-                delay(armedCue.preWaitMs)
-            }
+            try {
+                if (armedCue.preWaitMs > 0) {
+                    delay(armedCue.preWaitMs)
+                }
 
-            audioEngine.play(
-                cue = armedCue,
-                basePath = repository.getBasePath(currentShow.id),
-                masterVolume = currentShow.masterVolume
-            )
+                val playId = audioEngine.play(
+                    cue = armedCue,
+                    basePath = repository.getBasePath(currentShow.id),
+                    masterVolume = currentShow.masterVolume
+                )
 
-            // Determine next armed cue
-            val nextCue = currentShow.nextCueAfter(armedCue.id)
-            _show.update { it.copy(armedCueId = nextCue?.id) }
+                if (playId == null) {
+                    showUserError("Audio file not found: ${armedCue.audioRelativePath}")
+                }
 
-            // Auto-continue (fire simultaneously)
-            if (armedCue.followAction == FollowAction.AUTO_CONTINUE && nextCue != null) {
-                if (armedCue.postWaitMs > 0) delay(armedCue.postWaitMs)
-                pressGo()
+                // Determine next armed cue
+                val nextCue = currentShow.nextCueAfter(armedCue.id)
+                _show.update { it.copy(armedCueId = nextCue?.id) }
+
+                // Auto-continue (fire simultaneously)
+                if (armedCue.followAction == FollowAction.AUTO_CONTINUE && nextCue != null) {
+                    if (armedCue.postWaitMs > 0) delay(armedCue.postWaitMs)
+                    pressGo()
+                }
+            } catch (e: Exception) {
+                ErrorLogger.error("CueDeckViewModel", "Error pressing GO", e)
+                showUserError("Playback failed: ${e.message}")
             }
         }
     }
@@ -132,30 +180,30 @@ class CueDeckViewModel(
         val active = activePlaybacks.value.find { it.cueId == cue.id }
 
         coroutineScope.launch {
-            if (active != null) {
-                when (cue.triggerMode) {
-                    TriggerMode.RETRIGGER -> {
-                        audioEngine.stop(active.playbackId, 0L)
-                        audioEngine.play(cue, repository.getBasePath(currentShow.id), currentShow.masterVolume)
+            try {
+                if (active != null) {
+                    when (cue.triggerMode) {
+                        TriggerMode.RETRIGGER -> {
+                            audioEngine.stop(active.playbackId, 0L)
+                            audioEngine.play(cue, repository.getBasePath(currentShow.id), currentShow.masterVolume)
+                        }
+                        TriggerMode.LOOP, TriggerMode.PLAY_ONCE -> {
+                            audioEngine.stop(active.playbackId, cue.fadeOutMs)
+                        }
+                        TriggerMode.GATE -> {
+                            audioEngine.stop(active.playbackId, 0L)
+                        }
                     }
-                    TriggerMode.LOOP, TriggerMode.PLAY_ONCE -> {
-                        // Toggle stop with fade out
-                        audioEngine.stop(active.playbackId, cue.fadeOutMs)
-                    }
-                    TriggerMode.GATE -> {
-                        audioEngine.stop(active.playbackId, 0L)
-                    }
+                } else {
+                    audioEngine.play(cue, repository.getBasePath(currentShow.id), currentShow.masterVolume)
                 }
-            } else {
-                audioEngine.play(cue, repository.getBasePath(currentShow.id), currentShow.masterVolume)
+            } catch (e: Exception) {
+                ErrorLogger.error("CueDeckViewModel", "Error triggering cart pad $slotIndex", e)
+                showUserError("Pad playback failed: ${e.message}")
             }
         }
     }
 
-    /**
-     * Set fader volume (0.0 to 1.25) for a specific mixer channel (0..3).
-     * Automatically maps to the active sound on that channel with configured smoothing.
-     */
     fun setFaderVolume(channelIndex: Int, volume: Float) {
         val list = _faderVolumes.value.toMutableList()
         if (channelIndex in list.indices) {
@@ -184,18 +232,12 @@ class CueDeckViewModel(
         _cartPageIndex.update { (it - 1 + totalPages) % totalPages }
     }
 
-    /**
-     * Stop a specific active playback
-     */
     fun stopActivePlayback(playbackId: String, fadeOutMs: Long = 500L) {
         coroutineScope.launch {
             audioEngine.stop(playbackId, fadeOutMs)
         }
     }
 
-    /**
-     * Emergency Panic Stop: Stops all active audio immediately or with panic fade
-     */
     fun panicStop(fadeOutMs: Long? = null) {
         val effectiveFade = fadeOutMs ?: _settings.value.panicFadeMs
         coroutineScope.launch {
@@ -203,7 +245,7 @@ class CueDeckViewModel(
         }
     }
 
-    fun armCue(cueId: String) {
+    fun setArmedCue(cueId: String) {
         _show.update { it.copy(armedCueId = cueId) }
     }
 
@@ -211,12 +253,8 @@ class CueDeckViewModel(
         _show.update { it.copy(isPerformanceLocked = !it.isPerformanceLocked) }
     }
 
-    fun switchViewMode(mode: ViewMode) {
-        _show.update { it.copy(currentViewMode = mode) }
-    }
-
-    fun setMasterVolume(vol: Float) {
-        val clamped = vol.coerceIn(0f, 1.5f)
+    fun setMasterVolume(volume: Float) {
+        val clamped = volume.coerceIn(0f, 1.5f)
         _show.update { it.copy(masterVolume = clamped) }
         audioEngine.setMasterVolume(clamped)
     }
@@ -265,6 +303,7 @@ class CueDeckViewModel(
 
     fun saveCurrentShow(userInitiated: Boolean = false) {
         repository.saveShow(_show.value)
+        saveSessionState()
         if (userInitiated) {
             coroutineScope.launch {
                 _saveFeedback.value = "Show Saved ✓"
@@ -274,11 +313,59 @@ class CueDeckViewModel(
         }
     }
 
-    fun loadShow(showId: String) {
-        val loaded = repository.loadShow(showId)
-        if (loaded != null) {
-            _show.value = loaded
-            audioEngine.setMasterVolume(loaded.masterVolume)
+    fun saveSessionState() {
+        val state = SessionState(
+            showId = _show.value.id,
+            armedCueId = _show.value.armedCueId,
+            activeTab = _activeTab.value,
+            cartPageIndex = _cartPageIndex.value,
+            faderVolumes = _faderVolumes.value
+        )
+        repository.saveSession(state)
+    }
+
+    fun restoreSessionState() {
+        val state = repository.loadSession() ?: return
+        if (state.showId == _show.value.id) {
+            if (state.armedCueId != null) {
+                _show.update { it.copy(armedCueId = state.armedCueId) }
+            }
+            _activeTab.value = state.activeTab
+            _cartPageIndex.value = state.cartPageIndex
+            if (state.faderVolumes.size == 4) {
+                _faderVolumes.value = state.faderVolumes
+            }
+        }
+    }
+
+    fun inspectCurrentStorage() {
+        coroutineScope.launch(Dispatchers.IO) {
+            val res = repository.inspectStorage(_show.value)
+            _storageInspection.value = res
+        }
+    }
+
+    fun purgeUnusedAudio() {
+        coroutineScope.launch(Dispatchers.IO) {
+            repository.purgeUnusedAudio(_show.value)
+            inspectCurrentStorage()
+        }
+    }
+
+    fun openStorageFolder() {
+        repository.openFolderInSystem(_show.value.id)
+    }
+
+    fun setImportProgress(fileName: String?, progress: Float?) {
+        _importFileName.value = fileName
+        _importProgress.value = progress
+    }
+
+    fun showUserError(message: String) {
+        coroutineScope.launch {
+            _userErrorMessage.value = message
+            delay(4000)
+            _userErrorMessage.value = null
         }
     }
 }

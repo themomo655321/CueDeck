@@ -47,6 +47,35 @@ class AndroidAudioEngine(private val context: Context) : AudioEngine {
     )
 
     private val activeTracks = ConcurrentHashMap<String, AndroidTrack>()
+    private var preloadedTrack: Pair<String, MediaPlayer>? = null
+
+    fun preload(cue: Cue, basePath: String) {
+        engineScope.launch(Dispatchers.IO) {
+            try {
+                if (preloadedTrack?.first == cue.id) return@launch
+                preloadedTrack?.second?.release()
+                preloadedTrack = null
+
+                val file = File(basePath, cue.audioRelativePath)
+                if (!file.exists()) return@launch
+
+                val player = MediaPlayer().apply {
+                    setAudioAttributes(
+                        AudioAttributes.Builder()
+                            .setContentType(AudioAttributes.CONTENT_TYPE_MUSIC)
+                            .setUsage(AudioAttributes.USAGE_MEDIA)
+                            .build()
+                    )
+                    setDataSource(file.absolutePath)
+                    prepare()
+                    if (cue.inPointMs > 0) {
+                        seekTo(cue.inPointMs.toInt())
+                    }
+                }
+                preloadedTrack = cue.id to player
+            } catch (ignored: Exception) {}
+        }
+    }
 
     init {
         // UI poll timer for real-time progress bars (20Hz)
@@ -66,15 +95,21 @@ class AndroidAudioEngine(private val context: Context) : AudioEngine {
         }
 
         try {
-            val player = MediaPlayer().apply {
-                setAudioAttributes(
-                    AudioAttributes.Builder()
-                        .setContentType(AudioAttributes.CONTENT_TYPE_MUSIC)
-                        .setUsage(AudioAttributes.USAGE_MEDIA)
-                        .build()
-                )
-                setDataSource(file.absolutePath)
-                prepare()
+            val player = if (preloadedTrack?.first == cue.id) {
+                val p = preloadedTrack!!.second
+                preloadedTrack = null
+                p
+            } else {
+                MediaPlayer().apply {
+                    setAudioAttributes(
+                        AudioAttributes.Builder()
+                            .setContentType(AudioAttributes.CONTENT_TYPE_MUSIC)
+                            .setUsage(AudioAttributes.USAGE_MEDIA)
+                            .build()
+                    )
+                    setDataSource(file.absolutePath)
+                    prepare()
+                }
             }
 
             val playbackId = UUID.randomUUID().toString()

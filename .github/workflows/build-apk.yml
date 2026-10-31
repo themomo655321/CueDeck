@@ -40,38 +40,48 @@ jobs:
       - name: Prepare APK Asset
         run: |
           mkdir -p release_assets
-          cp androidApp/build/outputs/apk/debug/androidApp-debug.apk release_assets/CueDeck-v1.0.2-debug.apk
+          cp androidApp/build/outputs/apk/debug/androidApp-debug.apk release_assets/CueDeck-v1.0.3-debug.apk
 
       - name: Upload APK as Workflow Artifact
         uses: actions/upload-artifact@v4
         with:
           name: CueDeck-debug-apk
-          path: release_assets/CueDeck-v1.0.2-debug.apk
+          path: release_assets/CueDeck-v1.0.3-debug.apk
           retention-days: 14
 
       - name: Create or Update GitHub Release
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: v1.0.2
-          name: "CueDeck v1.0.2 Preview APK"
+          tag_name: v1.0.3
+          name: "CueDeck v1.0.3 Preview APK"
           make_latest: true
           body: |
-            ### 🎛️ CueDeck v1.0.2 - Live Cue Trigger & Show Control
+            ### 🎛️ CueDeck v1.0.3 - Live Cue Trigger & Show Control
             Direct Android APK build for mobile & tablet testing (compatible with Android 11+ and ADVAN Sketsa 2).
             
-            #### 🛠️ Fixes & Enhancements in v1.0.2:
-            - **Fader Bi-Directional Drag Fix**: Resolved issue where pulling the fader down locked it at the bottom. Decoupled frame-smoothing loop from touch updates so the fader smoothly glides up and down without restriction.
-            - **Double-Tap Reset to 100%**: Double-tapping anywhere on the fader track or cap instantly resets the channel volume to 100% (0 dB Unity gain).
-            - **Quick Tap on Percentage**: Tapping the volume percentage text readout at the top also resets directly to 100%.
-            - **Unity Gain Marker**: Visual feedback with a tactile indicator and green highlight at 100% volume.
-            
-            #### 🚀 Core Features:
-            - **Procreate-Style StreamLine Fader Smoothing**: Faders trail the finger with damped glide speed, eliminating hand jitter for effortless micro-fine tuning (configurable 0-90% in Settings).
-            - **4-Channel Live Fader Mixer**: Real-time level sliders for active playing sounds in both Cue Stack and Soundboard modes.
-            - **1x3 Compact Soundboard with Page Navigation**: `[ < PREV ]` and `[ NEXT > ]` paging controls to keep faders accessible.
-            - **Persistent Show Auto-Save**: Show state and cue configurations persist when switching apps.
-            - **Storage Bloat Protection**: Audio files are deduplicated and orphaned files are cleaned up on deletion.
-            - **In-App Auto-Update**: Checks GitHub and updates CueDeck with a single tap.
-          files: release_assets/CueDeck-v1.0.2-debug.apk
+            #### 🛠️ What's New in v1.0.3:
+            - **Triple Fader Fine-Tuning**:
+              - **[FINE] Mode Toggle**: 4x precision gear ratio for lag-free, ultra-fine adjustments.
+              - **[+] and [−] Nudge Steppers**: Nudge volume by ±1% per tap or hold.
+              - **Horizontal-to-Fine Scrubbing**: Pulling sideways dynamically slows down fader speed with a `FINE 4X` indicator badge.
+              - Retained double-tap reset to 100% and quick MUTE toggle.
+            - **Project Audio Storage & Bloat Inspector**:
+              - Audio stored in device-accessible external storage (`/Android/data/com.cuedeck.app/files/shows/`).
+              - In-app storage manager showing path, total MB consumed, file roster with active/unused tags, "Open in System Files", and 1-tap "Purge Unused Audio".
+            - **Hardware Volume Buttons as Stage Remote**:
+              - Optional Settings toggle: Volume UP = GO, Volume DOWN = Panic Stop. Suppresses phone volume popups.
+            - **Interactive Waveform Display**:
+              - Waveform peak visualization in Cue Editor with draggable green `IN` and red `OUT` handles for non-destructive trimming.
+            - **Drive / Cloud Import Progress Bar**:
+              - Asynchronous streaming from Google Drive / storage with progress bar (`0%` → `100%`).
+            - **Focus-Loss Auto-Save & Session Recovery**:
+              - Automatically persists show and live session state (`session_state.json`) on `onPause()`/`onStop()`. Returning to the app restores all cues, active tab, and fader levels.
+            - **Diagnostics & Error Log Grabber**:
+              - In-app error console with a 1-tap **"Copy Error Log to Clipboard"** button.
+            - **Live Performance Enhancements**:
+              - **Keep Screen Awake** toggle (prevents sleep during shows).
+              - **Haptic Vibration** on GO, Panic, and pad triggers.
+              - **Zero-Latency Pre-Buffering** for the armed cue.
+          files: release_assets/CueDeck-v1.0.3-debug.apk
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
