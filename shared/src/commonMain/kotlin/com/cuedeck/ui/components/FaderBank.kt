@@ -32,6 +32,7 @@ import androidx.compose.ui.zIndex
 import com.cuedeck.model.ActivePlayback
 import com.cuedeck.ui.theme.DarkSurface
 import com.cuedeck.ui.theme.PanicRed
+import kotlinx.coroutines.delay
 import kotlin.math.abs
 import kotlin.math.log10
 import kotlin.math.roundToInt
@@ -370,11 +371,9 @@ private fun TactileVerticalFader(
     // Option A: Elastic Throttle Chasing Fader Loop in FINE mode
     LaunchedEffect(isHolding, isFineMode, targetVol) {
         if (!isHolding || !isFineMode) return@LaunchedEffect
-        var lastTimeNanos = withFrameNanos { it }
         while (isHolding && isFineMode) {
-            val nowNanos = withFrameNanos { it }
-            val dt = ((nowNanos - lastTimeNanos) / 1_000_000_000f).coerceIn(0.001f, 0.05f)
-            lastTimeNanos = nowNanos
+            delay(16)
+            val dt = 0.016f
 
             val currentTarget = targetVol ?: break
             val diff = currentTarget - currentDisplayVol
