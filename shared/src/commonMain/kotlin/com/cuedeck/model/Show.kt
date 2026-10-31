@@ -24,7 +24,9 @@ data class Cue(
     val postWaitMs: Long = 0L,
     val fadeInMs: Long = 0L,
     val fadeOutMs: Long = 1000L,
-    val notes: String = ""
+    val notes: String = "",
+    val crossfadeOnGo: Boolean = false,
+    val crossfadeDurationMs: Long = 1500L
 ) {
     /**
      * Effective playable duration between inPoint and outPoint.

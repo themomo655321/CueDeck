@@ -4,6 +4,7 @@ import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -12,7 +13,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.VolumeDown
 import androidx.compose.material3.*
-import androidx.compose.runtime.Composable
+import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -78,6 +79,7 @@ private fun ActiveCueRow(
 ) {
     val totalSec = playback.totalMs / 1000
     val remSec = playback.remainingMs / 1000
+    var showDurationMode by remember { mutableStateOf(false) } // false = Countdown (-m:ss), true = Total Duration (m:ss)
 
     Surface(
         color = Color(0xFF262626),
@@ -110,13 +112,25 @@ private fun ActiveCueRow(
                     )
                 }
 
-                // Remaining time countdown
-                Text(
-                    text = if (playback.isLooping) "LOOPING" else "-%d:%02d".format(remSec / 60, remSec % 60),
-                    fontSize = 13.sp,
-                    fontWeight = FontWeight.Bold,
-                    color = if (playback.isFadingOut) Color(0xFFFFB300) else Color(0xFF4CAF50)
-                )
+                // Remaining time countdown vs Total duration toggleable on tap
+                val timeLabel = when {
+                    playback.isLooping -> "LOOPING"
+                    showDurationMode -> "%d:%02d".format(totalSec / 60, totalSec % 60)
+                    else -> "-%d:%02d".format(remSec / 60, remSec % 60)
+                }
+                Box(
+                    modifier = Modifier
+                        .clip(RoundedCornerShape(4.dp))
+                        .clickable { showDurationMode = !showDurationMode }
+                        .padding(horizontal = 4.dp, vertical = 2.dp)
+                ) {
+                    Text(
+                        text = timeLabel,
+                        fontSize = 13.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = if (playback.isFadingOut) Color(0xFFFFB300) else if (showDurationMode) Color(0xFF00E5FF) else Color(0xFF4CAF50)
+                    )
+                }
 
                 Spacer(modifier = Modifier.width(10.dp))
 

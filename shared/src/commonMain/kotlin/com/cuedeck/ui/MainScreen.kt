@@ -29,6 +29,7 @@ fun MainScreen(
     viewModel: CueDeckViewModel,
     onImportAudioRequest: () -> Unit = {},
     onCheckForUpdates: () -> Unit = {},
+    onHapticFeedback: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     val show by viewModel.show.collectAsState()
@@ -43,8 +44,6 @@ fun MainScreen(
     val importProgress by viewModel.importProgress.collectAsState()
     val importFileName by viewModel.importFileName.collectAsState()
     val isImportMinimized by viewModel.isImportMinimized.collectAsState()
-    val autoCrossfadeEnabled by viewModel.autoCrossfadeEnabled.collectAsState()
-    val crossfadeDurationMs by viewModel.crossfadeDurationMs.collectAsState()
     val savedShows by viewModel.savedShows.collectAsState()
     val userErrorMessage by viewModel.userErrorMessage.collectAsState()
     val errorLogs by ErrorLogger.logs.collectAsState()
@@ -78,7 +77,10 @@ fun MainScreen(
                 onViewModeChange = { viewModel.switchViewMode(it) },
                 onToggleLock = { viewModel.togglePerformanceLock() },
                 onVolumeChange = { viewModel.setMasterVolume(it) },
-                onPanicStop = { viewModel.panicStop() },
+                onPanicStop = {
+                    onHapticFeedback()
+                    viewModel.panicStop()
+                },
                 onSaveShow = { viewModel.saveCurrentShow(userInitiated = true) },
                 onOpenShowManager = {
                     viewModel.refreshSavedShows()
@@ -150,18 +152,28 @@ fun MainScreen(
                             cues = show.cues,
                             armedCueId = armedCue?.id,
                             isPerformanceLocked = show.isPerformanceLocked,
-                            onArmCue = { viewModel.armCue(it) },
+                            onArmCue = {
+                                onHapticFeedback()
+                                viewModel.armCue(it)
+                            },
                             onEditCue = { editingCue = it },
                             onAddCueClick = { showImportChoiceDialog = true },
                             onMoveUp = { viewModel.moveCueUp(it) },
                             onMoveDown = { viewModel.moveCueDown(it) },
                             onMoveCue = { from, to -> viewModel.moveCue(from, to) },
+                            onDuplicateCue = {
+                                onHapticFeedback()
+                                viewModel.duplicateCue(it)
+                            },
                             modifier = Modifier.weight(1f).fillMaxWidth()
                         )
 
                         GoButton(
                             armedCue = armedCue,
-                            onGoClick = { viewModel.pressGo() },
+                            onGoClick = {
+                                onHapticFeedback()
+                                viewModel.pressGo()
+                            },
                             modifier = Modifier.fillMaxWidth().height(64.dp)
                         )
                     }
@@ -208,12 +220,19 @@ fun MainScreen(
                                 cues = show.cues,
                                 armedCueId = armedCue?.id,
                                 isPerformanceLocked = show.isPerformanceLocked,
-                                onArmCue = { viewModel.armCue(it) },
+                                onArmCue = {
+                                    onHapticFeedback()
+                                    viewModel.armCue(it)
+                                },
                                 onEditCue = { editingCue = it },
                                 onAddCueClick = { showImportChoiceDialog = true },
                                 onMoveUp = { viewModel.moveCueUp(it) },
                                 onMoveDown = { viewModel.moveCueDown(it) },
                                 onMoveCue = { from, to -> viewModel.moveCue(from, to) },
+                                onDuplicateCue = {
+                                    onHapticFeedback()
+                                    viewModel.duplicateCue(it)
+                                },
                                 modifier = Modifier.fillMaxSize()
                             )
                         }
@@ -234,7 +253,10 @@ fun MainScreen(
                     // Persistent Full-Width Giant GO Button at bottom
                     GoButton(
                         armedCue = armedCue,
-                        onGoClick = { viewModel.pressGo() },
+                        onGoClick = {
+                            onHapticFeedback()
+                            viewModel.pressGo()
+                        },
                         modifier = Modifier
                             .fillMaxWidth()
                             .padding(top = 4.dp)
@@ -337,10 +359,6 @@ fun MainScreen(
     if (showSettingsModal) {
         SettingsModal(
             settings = settings,
-            autoCrossfadeEnabled = autoCrossfadeEnabled,
-            crossfadeDurationMs = crossfadeDurationMs,
-            onToggleAutoCrossfade = { viewModel.setAutoCrossfadeEnabled(it) },
-            onChangeCrossfadeDuration = { viewModel.setCrossfadeDuration(it) },
             onSaveSettings = { viewModel.updateSettings(it) },
             onOpenStorageInspector = {
                 viewModel.inspectCurrentStorage()

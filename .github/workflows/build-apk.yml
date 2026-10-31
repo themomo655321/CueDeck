@@ -40,44 +40,47 @@ jobs:
       - name: Prepare APK Asset
         run: |
           mkdir -p release_assets
-          cp androidApp/build/outputs/apk/debug/androidApp-debug.apk release_assets/CueDeck-v1.0.7-debug.apk
+          cp androidApp/build/outputs/apk/debug/androidApp-debug.apk release_assets/CueDeck-v1.0.8-debug.apk
 
       - name: Upload APK as Workflow Artifact
         uses: actions/upload-artifact@v4
         with:
           name: CueDeck-debug-apk
-          path: release_assets/CueDeck-v1.0.7-debug.apk
+          path: release_assets/CueDeck-v1.0.8-debug.apk
           retention-days: 14
 
       - name: Create or Update GitHub Release
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: v1.0.7
-          name: "CueDeck v1.0.7 Preview APK"
+          tag_name: v1.0.8
+          name: "CueDeck v1.0.8 Preview APK"
           make_latest: true
           body: |
-            ### 🎛️ CueDeck v1.0.7 - Live Cue Trigger & Show Control
+            ### 🎛️ CueDeck v1.0.8 - Live Cue Trigger & Show Control
             Direct Android APK build for mobile & tablet testing (compatible with Android 11+ and ADVAN Sketsa 2).
 
-            #### 🛠️ What's New in v1.0.7:
-            - **Horizontal Waveform Length Zoom (Time-Axis Expansion)**:
-              - 1X (full track fit), 2X (200% width), and 4X (400% width) horizontal zoom with silky-smooth scrolling.
-              - In/Out markers, playhead, and waveform amplitude bars stretch across the zoomed time axis for micro-precision editing.
-            - **Non-Blocking Toast Pill**:
-              - Moved import/save notifications to an animated floating pill centered below the top bar with auto-dismiss.
-              - Completely prevents notifications from covering Settings, Master Volume, or Panic buttons.
-            - **Long-Press & Drag to Rearrange Cue Stack**:
-              - Touch & hold any cue to pick it up, drag it to any position in the cue stack, and drop it.
-              - Sequential numbering automatically updates and persists to storage.
-            - **Download Cancellation & Minimized Background Mode**:
-              - Cancel slow or unwanted web audio downloads at any time with `[ Cancel ]`.
-              - Tap `[ Run in Background ]` / `[ Minimize ]` to collapse the progress modal into an unobtrusive bottom indicator, allowing continued app usage during downloads.
-            - **Auto-Crossfade on GO**:
-              - Automatically fades out outgoing tracks when the next cue is triggered.
-              - Toggleable in Settings with configurable crossfade durations (0.5s to 3.0s, default 1.5s).
-            - **Multi-Show Project Manager (Save As & Load Show)**:
-              - Tap the show title in the top bar to open the Show Manager.
-              - Create new shows, save copies ("Save As..."), rename, delete, and switch between multiple saved shows on device.
-          files: release_assets/CueDeck-v1.0.7-debug.apk
+            #### 🛠️ What's New in v1.0.8:
+            - **Per-Cue Crossfade Out Previous Track on GO**:
+              - Moved crossfade out of global settings and directly into Cue Edit modal.
+              - Each cue can independently toggle "Crossfade Out Previous Track on GO" with custom fade times (`0.5s`, `1.0s`, `1.5s`, `2.0s`, `3.0s`).
+              - Keeps cues that need layering/overlapping unaffected!
+            - **Cue Duplication Button `[ ⧉ ]` & Removed Pause Symbol**:
+              - Tap the new duplicate button on any cue row to duplicate the cue with audio file, trim points, and settings intact.
+              - Removed confusing pause icon from cue stack rows.
+            - **Tap Live Track Countdown to Toggle Duration View**:
+              - Tap the timer on any playing track in Now Playing to toggle between countdown remaining (`-1:24`) and total duration (`2:15`).
+            - **Physical Volume Keys as Cue Selector**:
+              - Hardware Volume UP selects the previous cue in the stack.
+              - Hardware Volume DOWN selects the next cue in the stack.
+            - **Hardware Haptics Vibration Fix**:
+              - Added `VIBRATE` permission and multi-API direct hardware vibrator fallback for tactile vibration feedback on GO, Panic, cue selection, and volume rocker stepping.
+            - **Waveform Gliding & Zoom Horizontal Scroll Fix**:
+              - Dedicated top (IN) and bottom (OUT) touch grips glide smoothly with 1:1 finger tracking.
+              - Waveform canvas no longer intercepts gestures, allowing natural horizontal panning and scrolling across 1X, 2X, and 4X zoomed waveforms.
+            - **Exact Numeric Timecode Typing in Cue Edit**:
+              - Type exact seconds (`12.50`) or minutes:seconds (`1:15.20`) directly in IN and OUT numeric fields.
+            - **Reliable Cue Reordering**:
+              - Attached drag reordering directly to the dedicated `[ ≡ ]` handle, eliminating misclicks or accidental dragging when selecting unselected cues.
+          files: release_assets/CueDeck-v1.0.8-debug.apk
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

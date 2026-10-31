@@ -7,6 +7,7 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Close
@@ -20,12 +21,13 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.cuedeck.model.*
 import com.cuedeck.ui.theme.DarkSurface
-import com.cuedeck.ui.theme.DarkSurfaceVariant
 import com.cuedeck.ui.theme.PanicRed
+import kotlin.math.abs
 
 val PRESET_COLORS = listOf(
     0xFFE53935, // Red
@@ -60,6 +62,8 @@ fun CueEditorModal(
     }
     var triggerMode by remember { mutableStateOf(cue.triggerMode) }
     var followAction by remember { mutableStateOf(cue.followAction) }
+    var crossfadeOnGo by remember { mutableStateOf(cue.crossfadeOnGo) }
+    var crossfadeDurationMs by remember { mutableLongStateOf(cue.crossfadeDurationMs) }
     var selectedColor by remember { mutableStateOf(cue.colorHex) }
     var notes by remember { mutableStateOf(cue.notes) }
 
@@ -213,7 +217,73 @@ fun CueEditorModal(
                 onOutPointChange = { outPointSec = it }
             )
 
-            Spacer(modifier = Modifier.height(12.dp))
+            // Exact In / Out Numeric Timecode Fields (Supports typing seconds or m:ss.s)
+            var inInputText by remember { mutableStateOf(formatSeconds(inPointSec)) }
+            var outInputText by remember { mutableStateOf(formatSeconds(outPointSec)) }
+
+            LaunchedEffect(inPointSec) {
+                val parsed = parseTimeToSeconds(inInputText)
+                if (parsed == null || abs(parsed - inPointSec) > 0.05f) {
+                    inInputText = formatSeconds(inPointSec)
+                }
+            }
+
+            LaunchedEffect(outPointSec) {
+                val parsed = parseTimeToSeconds(outInputText)
+                if (parsed == null || abs(parsed - outPointSec) > 0.05f) {
+                    outInputText = formatSeconds(outPointSec)
+                }
+            }
+
+            Row(
+                modifier = Modifier.fillMaxWidth().padding(top = 8.dp),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                OutlinedTextField(
+                    value = inInputText,
+                    onValueChange = { newStr ->
+                        inInputText = newStr
+                        parseTimeToSeconds(newStr)?.let { sec ->
+                            val clamped = sec.coerceIn(0f, (outPointSec - 0.05f).coerceAtLeast(0f))
+                            inPointSec = clamped
+                        }
+                    },
+                    label = { Text("IN TIME (sec)", color = Color(0xFF00E676), fontSize = 11.sp) },
+                    singleLine = true,
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Text),
+                    colors = OutlinedTextFieldDefaults.colors(
+                        focusedTextColor = Color.White,
+                        unfocusedTextColor = Color.White,
+                        focusedBorderColor = Color(0xFF00E676),
+                        unfocusedBorderColor = Color(0xFF00E676).copy(alpha = 0.5f)
+                    ),
+                    modifier = Modifier.weight(1f)
+                )
+
+                OutlinedTextField(
+                    value = outInputText,
+                    onValueChange = { newStr ->
+                        outInputText = newStr
+                        parseTimeToSeconds(newStr)?.let { sec ->
+                            val clamped = sec.coerceIn(inPointSec + 0.05f, totalDurationSec)
+                            outPointSec = clamped
+                        }
+                    },
+                    label = { Text("OUT TIME (sec)", color = Color(0xFFFF5252), fontSize = 11.sp) },
+                    singleLine = true,
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Text),
+                    colors = OutlinedTextFieldDefaults.colors(
+                        focusedTextColor = Color.White,
+                        unfocusedTextColor = Color.White,
+                        focusedBorderColor = Color(0xFFFF5252),
+                        unfocusedBorderColor = Color(0xFFFF5252).copy(alpha = 0.5f)
+                    ),
+                    modifier = Modifier.weight(1f)
+                )
+            }
+
+            Spacer(modifier = Modifier.height(14.dp))
 
             // Volume & Fades with Auto-Gain Normalize
             Row(
@@ -298,6 +368,44 @@ fun CueEditorModal(
 
             Spacer(modifier = Modifier.height(12.dp))
 
+            // Per-Cue Crossfade Previous Track on GO
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween,
+                modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp)
+            ) {
+                Column(modifier = Modifier.weight(1f)) {
+                    Text("Crossfade Out Previous Track on GO", fontWeight = FontWeight.Bold, fontSize = 13.sp, color = Color.White)
+                    Text("Smoothly fade out whatever was playing when this cue starts", fontSize = 11.sp, color = Color.Gray)
+                }
+                Switch(
+                    checked = crossfadeOnGo,
+                    onCheckedChange = { crossfadeOnGo = it },
+                    colors = SwitchDefaults.colors(
+                        checkedThumbColor = Color.White,
+                        checkedTrackColor = Color(0xFF00E5FF)
+                    )
+                )
+            }
+            if (crossfadeOnGo) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(6.dp),
+                    modifier = Modifier.fillMaxWidth().padding(top = 2.dp, bottom = 6.dp)
+                ) {
+                    Text("Fade Time:", fontSize = 11.sp, color = Color.LightGray)
+                    listOf(500L to "0.5s", 1000L to "1.0s", 1500L to "1.5s", 2000L to "2.0s", 3000L to "3.0s").forEach { (ms, lbl) ->
+                        FilterChip(
+                            selected = crossfadeDurationMs == ms,
+                            onClick = { crossfadeDurationMs = ms },
+                            label = { Text(lbl, fontSize = 10.sp) }
+                        )
+                    }
+                }
+            }
+
+            Spacer(modifier = Modifier.height(12.dp))
+
             // Color Swatches
             Text("Color Tag", fontWeight = FontWeight.Bold, fontSize = 13.sp, color = Color.LightGray)
             Row(modifier = Modifier.fillMaxWidth().padding(top = 6.dp), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
@@ -346,6 +454,8 @@ fun CueEditorModal(
                             outPointMs = (outPointSec * 1000).toLong(),
                             triggerMode = triggerMode,
                             followAction = followAction,
+                            crossfadeOnGo = crossfadeOnGo,
+                            crossfadeDurationMs = crossfadeDurationMs,
                             colorHex = selectedColor,
                             notes = notes
                         )
@@ -363,4 +473,27 @@ fun CueEditorModal(
             Spacer(modifier = Modifier.height(16.dp))
         }
     }
+}
+
+private fun parseTimeToSeconds(input: String): Float? {
+    val trimmed = input.trim()
+    if (trimmed.isEmpty()) return null
+    return if (trimmed.contains(':')) {
+        val parts = trimmed.split(':')
+        if (parts.size == 2) {
+            val min = parts[0].toFloatOrNull() ?: return null
+            val sec = parts[1].toFloatOrNull() ?: return null
+            min * 60f + sec
+        } else null
+    } else {
+        trimmed.toFloatOrNull()
+    }
+}
+
+private fun formatSeconds(sec: Float): String {
+    val totalSec = sec.toInt()
+    val hundredths = ((sec - totalSec) * 100).toInt()
+    val min = totalSec / 60
+    val s = totalSec % 60
+    return if (min > 0) "%d:%02d.%02d".format(min, s, hundredths) else "%.2f".format(sec)
 }

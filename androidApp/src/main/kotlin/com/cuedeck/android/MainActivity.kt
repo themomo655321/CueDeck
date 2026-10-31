@@ -1,8 +1,13 @@
 package com.cuedeck.android
 
+import android.content.Context
 import android.media.MediaMetadataRetriever
 import android.net.Uri
+import android.os.Build
 import android.os.Bundle
+import android.os.VibrationEffect
+import android.os.Vibrator
+import android.os.VibratorManager
 import android.provider.OpenableColumns
 import android.view.HapticFeedbackConstants
 import android.view.KeyEvent
@@ -89,7 +94,8 @@ class MainActivity : ComponentActivity() {
                 MainScreen(
                     viewModel = viewModel,
                     onImportAudioRequest = { audioPickerLauncher.launch("audio/*") },
-                    onCheckForUpdates = { checkAppUpdate(silent = false) }
+                    onCheckForUpdates = { checkAppUpdate(silent = false) },
+                    onHapticFeedback = { triggerHapticClick() }
                 )
 
                 // In-App Auto Update Dialog
@@ -242,14 +248,33 @@ class MainActivity : ComponentActivity() {
     }
 
     private fun triggerHapticClick() {
-        if (viewModel.settings.value.hapticFeedbackEnabled) {
-            window.decorView.performHapticFeedback(HapticFeedbackConstants.KEYBOARD_TAP)
-        }
+        if (!viewModel.settings.value.hapticFeedbackEnabled) return
+        try {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                val vibratorManager = getSystemService(Context.VIBRATOR_MANAGER_SERVICE) as? VibratorManager
+                vibratorManager?.defaultVibrator?.vibrate(
+                    VibrationEffect.createOneShot(45L, VibrationEffect.DEFAULT_AMPLITUDE)
+                )
+            } else if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                val vibrator = getSystemService(Context.VIBRATOR_SERVICE) as? Vibrator
+                vibrator?.vibrate(VibrationEffect.createOneShot(45L, VibrationEffect.DEFAULT_AMPLITUDE))
+            } else {
+                @Suppress("DEPRECATION")
+                val vibrator = getSystemService(Context.VIBRATOR_SERVICE) as? Vibrator
+                vibrator?.vibrate(45L)
+            }
+        } catch (ignored: Exception) {}
+        try {
+            window.decorView.performHapticFeedback(
+                HapticFeedbackConstants.KEYBOARD_TAP,
+                HapticFeedbackConstants.FLAG_IGNORE_GLOBAL_SETTING or HapticFeedbackConstants.FLAG_IGNORE_VIEW_SETTING
+            )
+        } catch (ignored: Exception) {}
     }
 
     /**
      * Physical hardware volume keys handling.
-     * When volumeButtonsTriggerGo is ON: Vol UP = GO, Vol DOWN = Panic.
+     * When volumeButtonsTriggerGo is ON: Vol UP = Select Previous Cue, Vol DOWN = Select Next Cue.
      * When OFF: Normal device volume changes.
      */
     override fun onKeyDown(keyCode: Int, event: KeyEvent?): Boolean {
@@ -258,14 +283,14 @@ class MainActivity : ComponentActivity() {
                 KeyEvent.KEYCODE_VOLUME_UP -> {
                     if (event?.repeatCount == 0) {
                         triggerHapticClick()
-                        viewModel.pressGo()
+                        viewModel.selectPreviousCue()
                     }
                     return true
                 }
                 KeyEvent.KEYCODE_VOLUME_DOWN -> {
                     if (event?.repeatCount == 0) {
                         triggerHapticClick()
-                        viewModel.panicStop()
+                        viewModel.selectNextCue()
                     }
                     return true
                 }

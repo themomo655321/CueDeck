@@ -26,10 +26,6 @@ import com.cuedeck.ui.theme.GoGreen
 @Composable
 fun SettingsModal(
     settings: AppSettings,
-    autoCrossfadeEnabled: Boolean = true,
-    crossfadeDurationMs: Long = 1500L,
-    onToggleAutoCrossfade: (Boolean) -> Unit = {},
-    onChangeCrossfadeDuration: (Long) -> Unit = {},
     onSaveSettings: (AppSettings) -> Unit,
     onOpenStorageInspector: () -> Unit = {},
     onOpenDiagnostics: () -> Unit = {},
@@ -75,7 +71,7 @@ fun SettingsModal(
 
             Spacer(modifier = Modifier.height(14.dp))
 
-            // Section: Physical Volume Remote Trigger
+            // Section: Physical Volume Keys as Cue Selector
             Row(
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.SpaceBetween,
@@ -83,13 +79,13 @@ fun SettingsModal(
             ) {
                 Column(modifier = Modifier.weight(1f)) {
                     Text(
-                        text = "Hardware Volume Keys as Remote",
+                        text = "Hardware Volume Keys as Cue Selector",
                         fontSize = 14.sp,
                         fontWeight = FontWeight.Bold,
                         color = Color.White
                     )
                     Text(
-                        text = "Vol UP = GO, Vol DOWN = Panic Stop. Suppresses phone volume popups.",
+                        text = "Vol UP = Select Previous Cue, Vol DOWN = Select Next Cue.",
                         fontSize = 11.sp,
                         color = Color.Gray
                     )
@@ -98,64 +94,6 @@ fun SettingsModal(
                     checked = volumeButtonsTriggerGo,
                     onCheckedChange = { volumeButtonsTriggerGo = it }
                 )
-            }
-
-            Divider(color = Color(0xFF2C2C2C), modifier = Modifier.padding(vertical = 10.dp))
-
-            // Section: Auto Crossfade on GO
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.SpaceBetween,
-                modifier = Modifier.fillMaxWidth()
-            ) {
-                Column(modifier = Modifier.weight(1f)) {
-                    Text(
-                        text = "Auto-Crossfade on GO",
-                        fontSize = 14.sp,
-                        fontWeight = FontWeight.Bold,
-                        color = Color.White
-                    )
-                    Text(
-                        text = "Automatically fades out previously playing track when next cue fires.",
-                        fontSize = 11.sp,
-                        color = Color.Gray
-                    )
-                }
-                Switch(
-                    checked = autoCrossfadeEnabled,
-                    onCheckedChange = { onToggleAutoCrossfade(it) }
-                )
-            }
-
-            if (autoCrossfadeEnabled) {
-                Spacer(modifier = Modifier.height(6.dp))
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    modifier = Modifier.fillMaxWidth()
-                ) {
-                    Text(
-                        text = "Fade Duration: ${(crossfadeDurationMs / 1000f)}s",
-                        fontSize = 12.sp,
-                        color = Color(0xFF00E5FF),
-                        fontWeight = FontWeight.Bold
-                    )
-                    Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                        listOf(500L to "0.5s", 1000L to "1.0s", 1500L to "1.5s", 2000L to "2.0s", 3000L to "3.0s").forEach { (ms, lbl) ->
-                            OutlinedButton(
-                                onClick = { onChangeCrossfadeDuration(ms) },
-                                colors = ButtonDefaults.outlinedButtonColors(
-                                    containerColor = if (crossfadeDurationMs == ms) Color(0xFF00E5FF) else Color.Transparent,
-                                    contentColor = if (crossfadeDurationMs == ms) Color.Black else Color.White
-                                ),
-                                contentPadding = PaddingValues(horizontal = 6.dp, vertical = 2.dp),
-                                modifier = Modifier.height(28.dp)
-                            ) {
-                                Text(lbl, fontSize = 10.sp, fontWeight = FontWeight.Bold)
-                            }
-                        }
-                    }
-                }
             }
 
             Divider(color = Color(0xFF2C2C2C), modifier = Modifier.padding(vertical = 10.dp))
@@ -338,7 +276,7 @@ fun SettingsModal(
                         color = Color.White
                     )
                     Text(
-                        text = "Installed: v1.0.7",
+                        text = "Installed: v1.0.8",
                         fontSize = 12.sp,
                         color = Color.Gray
                     )

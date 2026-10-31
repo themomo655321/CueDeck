@@ -60,12 +60,6 @@ class CueDeckViewModel(
     val isImportMinimized: StateFlow<Boolean> = _isImportMinimized.asStateFlow()
     private var importJob: Job? = null
 
-    private val _autoCrossfadeEnabled = MutableStateFlow(true)
-    val autoCrossfadeEnabled: StateFlow<Boolean> = _autoCrossfadeEnabled.asStateFlow()
-
-    private val _crossfadeDurationMs = MutableStateFlow(1500L)
-    val crossfadeDurationMs: StateFlow<Long> = _crossfadeDurationMs.asStateFlow()
-
     private val _savedShows = MutableStateFlow<List<ShowSummary>>(emptyList())
     val savedShows: StateFlow<List<ShowSummary>> = _savedShows.asStateFlow()
 
@@ -221,10 +215,10 @@ class CueDeckViewModel(
                     delay(armedCue.preWaitMs)
                 }
 
-                // If auto-crossfade is enabled, smoothly fade out any currently playing tracks
-                if (_autoCrossfadeEnabled.value) {
+                // If this cue has crossfadeOnGo enabled, smoothly fade out any currently playing tracks
+                if (armedCue.crossfadeOnGo) {
                     val active = activePlaybacks.value
-                    val xFadeMs = _crossfadeDurationMs.value
+                    val xFadeMs = armedCue.crossfadeDurationMs
                     for (track in active) {
                         audioEngine.stop(track.playbackId, xFadeMs)
                     }
@@ -458,6 +452,45 @@ class CueDeckViewModel(
         saveCurrentShow()
     }
 
+    fun selectPreviousCue() {
+        val cues = _show.value.cues
+        if (cues.isEmpty()) return
+        val currentArmedId = _show.value.armedCueId
+        val currentIndex = cues.indexOfFirst { it.id == currentArmedId }
+        val prevIndex = if (currentIndex > 0) currentIndex - 1 else 0
+        armCue(cues[prevIndex].id)
+    }
+
+    fun selectNextCue() {
+        val cues = _show.value.cues
+        if (cues.isEmpty()) return
+        val currentArmedId = _show.value.armedCueId
+        val currentIndex = cues.indexOfFirst { it.id == currentArmedId }
+        val nextIndex = if (currentIndex in 0 until cues.size - 1) currentIndex + 1 else cues.size - 1
+        armCue(cues[nextIndex].id)
+    }
+
+    fun duplicateCue(cueId: String) {
+        _show.update { show ->
+            val index = show.cues.indexOfFirst { it.id == cueId }
+            if (index < 0) return@update show
+            val source = show.cues[index]
+            val newId = UUID.randomUUID().toString()
+            val duplicated = source.copy(
+                id = newId,
+                name = "${source.name} (Copy)"
+            )
+            val list = show.cues.toMutableList()
+            list.add(index + 1, duplicated)
+            val renumbered = list.mapIndexed { idx, cue ->
+                cue.copy(cueNumber = "%.1f".format(idx + 1.0))
+            }
+            show.copy(cues = renumbered)
+        }
+        saveCurrentShow()
+        showSaveFeedback("Cue duplicated ✓")
+    }
+
     fun importFromUrl(url: String) {
         importJob?.cancel()
         _isImportMinimized.value = false
@@ -523,14 +556,6 @@ class CueDeckViewModel(
 
     fun expandImport() {
         _isImportMinimized.value = false
-    }
-
-    fun setAutoCrossfadeEnabled(enabled: Boolean) {
-        _autoCrossfadeEnabled.value = enabled
-    }
-
-    fun setCrossfadeDuration(ms: Long) {
-        _crossfadeDurationMs.value = ms
     }
 
     fun showSaveFeedback(message: String) {

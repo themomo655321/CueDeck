@@ -5,6 +5,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectDragGestures
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
@@ -23,6 +24,7 @@ import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -32,7 +34,9 @@ import kotlin.math.sin
 
 /**
  * Real non-destructive audio waveform scrubber & in/out trimmer with length-zooming.
- * Supports 1x (fit), 2x (double length), 4x (quad length) horizontal zoom with scrolling.
+ * Supports 1x (fit), 2x (double length), 4x (quad length) horizontal zoom with free scrolling.
+ * Independent top (IN) and bottom (OUT) touch targets allow 1:1 gliding drag without blocking
+ * horizontal waveform panning.
  */
 @Composable
 fun WaveformTrimView(
@@ -48,9 +52,10 @@ fun WaveformTrimView(
     modifier: Modifier = Modifier
 ) {
     val duration = totalDurationSec.coerceAtLeast(0.5f)
-    var zoomLevel by remember { mutableStateOf(1) } // 1x, 2x, 4x length zoom
-    var lastScrubTimestamp by remember { mutableStateOf(0L) }
+    var zoomLevel by remember { mutableIntStateOf(1) } // 1x, 2x, 4x length zoom
+    var lastScrubTimestamp by remember { mutableLongStateOf(0L) }
     val scrollState = rememberScrollState()
+    val density = LocalDensity.current
 
     // Fallback baseline peaks if real peaks are still extracting
     val fallbackPeaks = remember(cueId) {
@@ -64,7 +69,7 @@ fun WaveformTrimView(
 
     val displayPeaks = if (peaks.isNotEmpty()) peaks else fallbackPeaks
 
-    // When zooming in, auto-scroll to the in-point
+    // Auto-scroll towards in-point when zooming in
     LaunchedEffect(zoomLevel) {
         if (zoomLevel > 1) {
             val targetScroll = ((inPointSec / duration) * scrollState.maxValue).toInt()
@@ -138,15 +143,13 @@ fun WaveformTrimView(
         BoxWithConstraints(
             modifier = Modifier
                 .fillMaxWidth()
-                .height(84.dp)
+                .height(88.dp)
                 .clip(RoundedCornerShape(6.dp))
                 .background(Color(0xFF0D0D0D))
         ) {
             val viewportWidthDp = maxWidth
             val totalWidthDp = viewportWidthDp * zoomLevel
             val totalWidthPx = constraints.maxWidth.toFloat() * zoomLevel
-
-            var activeDragHandle by remember { mutableStateOf<String?>(null) }
 
             Box(
                 modifier = Modifier
@@ -157,55 +160,24 @@ fun WaveformTrimView(
                     modifier = Modifier
                         .width(totalWidthDp)
                         .fillMaxHeight()
-                        .pointerInput(duration, inPointSec, outPointSec, totalWidthPx) {
-                            detectDragGestures(
-                                onDragStart = { offset ->
-                                    val inX = (inPointSec / duration) * totalWidthPx
-                                    val outX = (outPointSec / duration) * totalWidthPx
-                                    val distIn = abs(offset.x - inX)
-                                    val distOut = abs(offset.x - outX)
-
-                                    activeDragHandle = if (distIn < distOut && distIn < 80f) {
-                                        "IN"
-                                    } else if (distOut < 80f) {
-                                        "OUT"
-                                    } else {
-                                        if (distIn < distOut) "IN" else "OUT"
-                                    }
-                                },
-                                onDragEnd = { activeDragHandle = null },
-                                onDragCancel = { activeDragHandle = null },
-                                onDrag = { change, _ ->
-                                    change.consume()
-                                    val newSec = ((change.position.x / totalWidthPx) * duration).coerceIn(0f, duration)
-                                    val now = System.currentTimeMillis()
-
-                                    if (activeDragHandle == "IN") {
-                                        val smoothIn = newSec.coerceAtMost((outPointSec - 0.05f).coerceAtLeast(0f))
-                                        onInPointChange(smoothIn)
-                                        if (now - lastScrubTimestamp > 60L) {
-                                            lastScrubTimestamp = now
-                                            onScrub?.invoke(smoothIn)
-                                        }
-                                    } else if (activeDragHandle == "OUT") {
-                                        val smoothOut = newSec.coerceAtLeast((inPointSec + 0.05f).coerceAtMost(duration))
-                                        onOutPointChange(smoothOut)
-                                        if (now - lastScrubTimestamp > 60L) {
-                                            lastScrubTimestamp = now
-                                            onScrub?.invoke(smoothOut)
-                                        }
-                                    }
-                                }
-                            )
-                        }
                 ) {
-                    Canvas(modifier = Modifier.fillMaxSize()) {
+                    // 1. Background Waveform Canvas (Tap to scrub/preview, drags pass through to horizontalScroll)
+                    Canvas(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .pointerInput(duration, totalWidthPx) {
+                                detectTapGestures { offset ->
+                                    val sec = (offset.x / totalWidthPx * duration).coerceIn(0f, duration)
+                                    onScrub?.invoke(sec)
+                                }
+                            }
+                    ) {
                         val inFraction = (inPointSec / duration).coerceIn(0f, 1f)
                         val outFraction = (outPointSec / duration).coerceIn(0f, 1f)
                         val inX = inFraction * size.width
                         val outX = outFraction * size.width
 
-                        // Dimmed trimmed-out regions
+                        // Shaded trimmed-out regions
                         if (inX > 0f) {
                             drawRect(
                                 color = Color(0x66000000),
@@ -223,12 +195,12 @@ fun WaveformTrimView(
 
                         // Active highlighted region
                         drawRect(
-                            color = Color(0x1A00E5FF),
+                            color = Color(0x1F00E5FF),
                             topLeft = Offset(inX, 0f),
                             size = Size((outX - inX).coerceAtLeast(0f), size.height)
                         )
 
-                        // Draw amplitude peak bars across expanded width
+                        // Amplitude peak bars across expanded width
                         val peakCount = displayPeaks.size
                         val step = size.width / peakCount
                         val midY = size.height / 2f
@@ -247,7 +219,7 @@ fun WaveformTrimView(
                             )
                         }
 
-                        // Draw IN Boundary Line (Green)
+                        // IN Boundary Line (Green)
                         drawLine(
                             color = Color(0xFF00E676),
                             start = Offset(inX, 0f),
@@ -255,7 +227,7 @@ fun WaveformTrimView(
                             strokeWidth = 3.dp.toPx()
                         )
 
-                        // Draw OUT Boundary Line (Red)
+                        // OUT Boundary Line (Red)
                         drawLine(
                             color = Color(0xFFFF5252),
                             start = Offset(outX, 0f),
@@ -281,59 +253,127 @@ fun WaveformTrimView(
                         }
                     }
 
-                    // IN Handle Flag
+                    // 2. IN Handle (Top Half: Width 48dp centered on inX)
                     val inFraction = (inPointSec / duration).coerceIn(0f, 1f)
-                    val inOffsetDp = ((totalWidthDp - 28.dp) * inFraction).coerceAtLeast(0.dp)
+                    val inXPx = inFraction * totalWidthPx
+                    val inXDp = with(density) { inXPx.toDp() }
+                    val inOffsetDp = (inXDp - 24.dp).coerceAtLeast(0.dp)
+
+                    var inDragAccPx by remember { mutableFloatStateOf(0f) }
+                    var inDragStartSec by remember { mutableFloatStateOf(0f) }
+
                     Box(
                         modifier = Modifier
                             .offset(x = inOffsetDp)
+                            .width(48.dp)
+                            .height(44.dp)
                             .align(Alignment.TopStart)
-                            .padding(top = 2.dp)
+                            .pointerInput(duration, totalWidthPx, outPointSec) {
+                                detectDragGestures(
+                                    onDragStart = {
+                                        inDragStartSec = inPointSec
+                                        inDragAccPx = 0f
+                                    },
+                                    onDrag = { change, dragAmount ->
+                                        change.consume()
+                                        inDragAccPx += dragAmount.x
+                                        val deltaSec = (inDragAccPx / totalWidthPx) * duration
+                                        val newSec = (inDragStartSec + deltaSec).coerceIn(0f, (outPointSec - 0.05f).coerceAtLeast(0f))
+                                        onInPointChange(newSec)
+                                        val now = System.currentTimeMillis()
+                                        if (now - lastScrubTimestamp > 60L) {
+                                            lastScrubTimestamp = now
+                                            onScrub?.invoke(newSec)
+                                        }
+                                    },
+                                    onDragEnd = {
+                                        onScrub?.invoke(inPointSec)
+                                    },
+                                    onDragCancel = {
+                                        onScrub?.invoke(inPointSec)
+                                    }
+                                )
+                            }
                     ) {
                         Surface(
                             color = Color(0xFF00E676),
-                            shape = RoundedCornerShape(bottomEnd = 4.dp),
-                            modifier = Modifier.padding(2.dp)
+                            shape = RoundedCornerShape(bottomEnd = 4.dp, bottomStart = 4.dp),
+                            modifier = Modifier.align(Alignment.TopCenter).padding(top = 2.dp)
                         ) {
                             Row(
                                 verticalAlignment = Alignment.CenterVertically,
-                                modifier = Modifier.padding(horizontal = 4.dp, vertical = 1.dp)
+                                modifier = Modifier.padding(horizontal = 4.dp, vertical = 2.dp)
                             ) {
                                 Icon(
                                     imageVector = Icons.Default.Flag,
-                                    contentDescription = "IN Point",
+                                    contentDescription = "IN Point Handle",
                                     tint = Color.Black,
                                     modifier = Modifier.size(10.dp)
                                 )
+                                Spacer(modifier = Modifier.width(2.dp))
                                 Text("IN", color = Color.Black, fontSize = 9.sp, fontWeight = FontWeight.Black)
                             }
                         }
                     }
 
-                    // OUT Handle Flag
+                    // 3. OUT Handle (Bottom Half: Width 48dp centered on outX)
                     val outFraction = (outPointSec / duration).coerceIn(0f, 1f)
-                    val outOffsetDp = ((totalWidthDp - 36.dp) * outFraction).coerceAtLeast(0.dp)
+                    val outXPx = outFraction * totalWidthPx
+                    val outXDp = with(density) { outXPx.toDp() }
+                    val outOffsetDp = (outXDp - 24.dp).coerceAtLeast(0.dp)
+
+                    var outDragAccPx by remember { mutableFloatStateOf(0f) }
+                    var outDragStartSec by remember { mutableFloatStateOf(0f) }
+
                     Box(
                         modifier = Modifier
                             .offset(x = outOffsetDp)
+                            .width(48.dp)
+                            .height(44.dp)
                             .align(Alignment.BottomStart)
-                            .padding(bottom = 2.dp)
+                            .pointerInput(duration, totalWidthPx, inPointSec) {
+                                detectDragGestures(
+                                    onDragStart = {
+                                        outDragStartSec = outPointSec
+                                        outDragAccPx = 0f
+                                    },
+                                    onDrag = { change, dragAmount ->
+                                        change.consume()
+                                        outDragAccPx += dragAmount.x
+                                        val deltaSec = (outDragAccPx / totalWidthPx) * duration
+                                        val newSec = (outDragStartSec + deltaSec).coerceIn(inPointSec + 0.05f, duration)
+                                        onOutPointChange(newSec)
+                                        val now = System.currentTimeMillis()
+                                        if (now - lastScrubTimestamp > 60L) {
+                                            lastScrubTimestamp = now
+                                            onScrub?.invoke(newSec)
+                                        }
+                                    },
+                                    onDragEnd = {
+                                        onScrub?.invoke(outPointSec)
+                                    },
+                                    onDragCancel = {
+                                        onScrub?.invoke(outPointSec)
+                                    }
+                                )
+                            }
                     ) {
                         Surface(
                             color = Color(0xFFFF5252),
-                            shape = RoundedCornerShape(topEnd = 4.dp),
-                            modifier = Modifier.padding(2.dp)
+                            shape = RoundedCornerShape(topEnd = 4.dp, topStart = 4.dp),
+                            modifier = Modifier.align(Alignment.BottomCenter).padding(bottom = 2.dp)
                         ) {
                             Row(
                                 verticalAlignment = Alignment.CenterVertically,
-                                modifier = Modifier.padding(horizontal = 4.dp, vertical = 1.dp)
+                                modifier = Modifier.padding(horizontal = 4.dp, vertical = 2.dp)
                             ) {
                                 Icon(
                                     imageVector = Icons.Default.Flag,
-                                    contentDescription = "OUT Point",
+                                    contentDescription = "OUT Point Handle",
                                     tint = Color.White,
                                     modifier = Modifier.size(10.dp)
                                 )
+                                Spacer(modifier = Modifier.width(2.dp))
                                 Text("OUT", color = Color.White, fontSize = 9.sp, fontWeight = FontWeight.Black)
                             }
                         }

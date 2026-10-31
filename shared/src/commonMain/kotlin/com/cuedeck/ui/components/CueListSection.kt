@@ -25,7 +25,6 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.zIndex
 import com.cuedeck.model.Cue
-import com.cuedeck.model.FollowAction
 import com.cuedeck.ui.theme.ArmedBlue
 import com.cuedeck.ui.theme.DarkSurface
 
@@ -36,6 +35,7 @@ fun CueListSection(
     isPerformanceLocked: Boolean,
     onArmCue: (String) -> Unit,
     onEditCue: (Cue) -> Unit,
+    onDuplicateCue: ((String) -> Unit)? = null,
     onAddCueClick: () -> Unit,
     onMoveUp: ((String) -> Unit)? = null,
     onMoveDown: ((String) -> Unit)? = null,
@@ -43,12 +43,12 @@ fun CueListSection(
     modifier: Modifier = Modifier
 ) {
     val listState = rememberLazyListState()
-    var draggingIndex by remember { mutableStateOf<Int?>(null) }
+    var draggingCueId by remember { mutableStateOf<String?>(null) }
     var dragAccumulatedY by remember { mutableStateOf(0f) }
 
     // Auto-scroll to armed cue whenever armedCueId changes so operator never loses track
     LaunchedEffect(armedCueId) {
-        if (armedCueId != null && draggingIndex == null) {
+        if (armedCueId != null && draggingCueId == null) {
             val armedIndex = cues.indexOfFirst { it.id == armedCueId }
             if (armedIndex >= 0) {
                 listState.animateScrollToItem(armedIndex)
@@ -107,9 +107,9 @@ fun CueListSection(
                     .fillMaxWidth()
                     .weight(1f)
             ) {
-                itemsIndexed(cues, key = { _, item -> item.id }) { index, cue ->
+                itemsIndexed(cues, key = { _, item -> item.id }) { _, cue ->
                     val isArmed = cue.id == armedCueId
-                    val isDragging = draggingIndex == index
+                    val isDragging = draggingCueId == cue.id
 
                     Box(
                         modifier = Modifier
@@ -125,44 +125,37 @@ fun CueListSection(
                             isArmed = isArmed,
                             isDragging = isDragging,
                             isPerformanceLocked = isPerformanceLocked,
-                            onArm = { onArmCue(cue.id) },
+                            onArm = {
+                                if (draggingCueId == null) {
+                                    onArmCue(cue.id)
+                                }
+                            },
                             onEdit = { onEditCue(cue) },
+                            onDuplicate = onDuplicateCue?.let { { it(cue.id) } },
                             onMoveUp = onMoveUp?.let { { it(cue.id) } },
                             onMoveDown = onMoveDown?.let { { it(cue.id) } },
-                            onDragGestureModifier = if (!isPerformanceLocked && onMoveCue != null) {
-                                Modifier.pointerInput(cues.size) {
-                                    detectDragGesturesAfterLongPress(
-                                        onDragStart = {
-                                            draggingIndex = index
-                                            dragAccumulatedY = 0f
-                                        },
-                                        onDragEnd = {
-                                            draggingIndex = null
-                                            dragAccumulatedY = 0f
-                                        },
-                                        onDragCancel = {
-                                            draggingIndex = null
-                                            dragAccumulatedY = 0f
-                                        },
-                                        onDrag = { change, dragAmount ->
-                                            change.consume()
-                                            dragAccumulatedY += dragAmount.y
-                                            val itemHeightPx = 110f // approx row height
-                                            val currentIdx = draggingIndex ?: return@detectDragGesturesAfterLongPress
-
-                                            if (dragAccumulatedY > itemHeightPx && currentIdx < cues.size - 1) {
-                                                onMoveCue(currentIdx, currentIdx + 1)
-                                                draggingIndex = currentIdx + 1
-                                                dragAccumulatedY -= itemHeightPx
-                                            } else if (dragAccumulatedY < -itemHeightPx && currentIdx > 0) {
-                                                onMoveCue(currentIdx, currentIdx - 1)
-                                                draggingIndex = currentIdx - 1
-                                                dragAccumulatedY += itemHeightPx
-                                            }
-                                        }
-                                    )
+                            onStartDrag = {
+                                draggingCueId = cue.id
+                                dragAccumulatedY = 0f
+                            },
+                            onDragBy = { dy ->
+                                dragAccumulatedY += dy
+                                val currentIdx = cues.indexOfFirst { it.id == draggingCueId }
+                                val itemHeightPx = 110f
+                                if (currentIdx >= 0) {
+                                    if (dragAccumulatedY > itemHeightPx && currentIdx < cues.size - 1) {
+                                        onMoveCue?.invoke(currentIdx, currentIdx + 1)
+                                        dragAccumulatedY -= itemHeightPx
+                                    } else if (dragAccumulatedY < -itemHeightPx && currentIdx > 0) {
+                                        onMoveCue?.invoke(currentIdx, currentIdx - 1)
+                                        dragAccumulatedY += itemHeightPx
+                                    }
                                 }
-                            } else Modifier
+                            },
+                            onEndDrag = {
+                                draggingCueId = null
+                                dragAccumulatedY = 0f
+                            }
                         )
                     }
                 }
@@ -179,9 +172,12 @@ private fun CueRow(
     isPerformanceLocked: Boolean,
     onArm: () -> Unit,
     onEdit: () -> Unit,
+    onDuplicate: (() -> Unit)? = null,
     onMoveUp: (() -> Unit)? = null,
     onMoveDown: (() -> Unit)? = null,
-    onDragGestureModifier: Modifier = Modifier
+    onStartDrag: () -> Unit = {},
+    onDragBy: (Float) -> Unit = {},
+    onEndDrag: () -> Unit = {}
 ) {
     val sec = cue.effectiveDurationMs / 1000
     val durationText = "%d:%02d".format(sec / 60, sec % 60)
@@ -207,7 +203,6 @@ private fun CueRow(
                 },
                 shape = RoundedCornerShape(8.dp)
             )
-            .then(onDragGestureModifier)
             .clickable { onArm() }
     ) {
         Row(
@@ -261,24 +256,8 @@ private fun CueRow(
                 modifier = Modifier.padding(horizontal = 4.dp)
             )
 
-            // Follow Action Icon
-            Icon(
-                imageVector = when (cue.followAction) {
-                    FollowAction.WAIT_GO -> Icons.Default.Pause
-                    FollowAction.AUTO_FOLLOW -> Icons.Default.ArrowDownward
-                    FollowAction.AUTO_CONTINUE -> Icons.Default.FastForward
-                },
-                contentDescription = cue.followAction.name,
-                tint = when (cue.followAction) {
-                    FollowAction.WAIT_GO -> Color.Gray
-                    FollowAction.AUTO_FOLLOW -> Color(0xFF4CAF50)
-                    FollowAction.AUTO_CONTINUE -> Color(0xFFFFB300)
-                },
-                modifier = Modifier.size(15.dp)
-            )
-
             if (!isPerformanceLocked) {
-                // Reorder buttons (quick one-tap fallback)
+                // Quick Move Up button
                 IconButton(
                     onClick = { onMoveUp?.invoke() },
                     modifier = Modifier.size(24.dp)
@@ -290,6 +269,8 @@ private fun CueRow(
                         modifier = Modifier.size(16.dp)
                     )
                 }
+
+                // Quick Move Down button
                 IconButton(
                     onClick = { onMoveDown?.invoke() },
                     modifier = Modifier.size(24.dp)
@@ -302,6 +283,20 @@ private fun CueRow(
                     )
                 }
 
+                // Duplicate Cue Button [ ⧉ ]
+                IconButton(
+                    onClick = { onDuplicate?.invoke() },
+                    modifier = Modifier.size(24.dp)
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.ContentCopy,
+                        contentDescription = "Duplicate Cue",
+                        tint = Color(0xFF00E5FF),
+                        modifier = Modifier.size(14.dp)
+                    )
+                }
+
+                // Edit Cue Button [ ⚙ ]
                 IconButton(
                     onClick = onEdit,
                     modifier = Modifier.size(26.dp)
@@ -314,15 +309,30 @@ private fun CueRow(
                     )
                 }
 
-                // Drag indicator handle
-                Icon(
-                    imageVector = Icons.Default.DragHandle,
-                    contentDescription = "Hold to drag",
-                    tint = if (isDragging) Color(0xFF00E5FF) else Color(0xFF555555),
+                // Dedicated Drag Handle [ ≡ ]
+                Box(
                     modifier = Modifier
-                        .size(18.dp)
-                        .padding(start = 2.dp)
-                )
+                        .size(28.dp)
+                        .pointerInput(cue.id) {
+                            detectDragGesturesAfterLongPress(
+                                onDragStart = { onStartDrag() },
+                                onDragEnd = { onEndDrag() },
+                                onDragCancel = { onEndDrag() },
+                                onDrag = { change, dragAmount ->
+                                    change.consume()
+                                    onDragBy(dragAmount.y)
+                                }
+                            )
+                        },
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.DragHandle,
+                        contentDescription = "Hold and drag to reorder",
+                        tint = if (isDragging) Color(0xFF00E5FF) else Color(0xFF777777),
+                        modifier = Modifier.size(18.dp)
+                    )
+                }
             }
         }
     }
