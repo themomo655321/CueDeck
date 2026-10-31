@@ -57,6 +57,7 @@ fun MainScreen(
     var showDiagnosticsModal by remember { mutableStateOf(false) }
     var showShowManagerModal by remember { mutableStateOf(false) }
     var showLayoutManagerModal by remember { mutableStateOf(false) }
+    var isCurrentOrientationLandscape by remember { mutableStateOf(false) }
 
     val armedCue = show.findCue(show.armedCueId) ?: show.cues.firstOrNull()
 
@@ -68,6 +69,7 @@ fun MainScreen(
             .background(screenBg)
     ) {
         val isWideScreen = maxWidth > 650.dp // Tablet or landscape orientation
+        isCurrentOrientationLandscape = isWideScreen
         val activeLayout = viewModel.getActiveLayout(isWideScreen)
         val density = androidx.compose.ui.platform.LocalDensity.current
         val totalWidthPx = with(density) { maxWidth.toPx() }
@@ -640,7 +642,7 @@ fun MainScreen(
     if (showLayoutManagerModal) {
         LayoutManagerModal(
             viewModel = viewModel,
-            isLandscapeCurrent = isWideScreen,
+            isLandscapeCurrent = isCurrentOrientationLandscape,
             onDismiss = { showLayoutManagerModal = false }
         )
     }
