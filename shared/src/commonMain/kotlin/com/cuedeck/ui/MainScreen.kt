@@ -30,6 +30,8 @@ fun MainScreen(
 ) {
     val show by viewModel.show.collectAsState()
     val activePlaybacks by viewModel.activePlaybacks.collectAsState()
+    val mixerSlots by viewModel.mixerSlots.collectAsState()
+    val mixerQueue by viewModel.mixerQueue.collectAsState()
     val faderVolumes by viewModel.faderVolumes.collectAsState()
     val settings by viewModel.settings.collectAsState()
     val cartPageIndex by viewModel.cartPageIndex.collectAsState()
@@ -138,7 +140,8 @@ fun MainScreen(
 
                         // 4 Live Mixer Faders on Tablet
                         FaderBank(
-                            activePlaybacks = activePlaybacks,
+                            mixerSlots = mixerSlots,
+                            queueCount = mixerQueue.size,
                             faderVolumes = faderVolumes,
                             fineModeEnabled = settings.fineModeEnabled,
                             onFineModeToggle = { viewModel.updateSettings(settings.copy(fineModeEnabled = it)) },
@@ -219,7 +222,8 @@ fun MainScreen(
 
                         // 4 Channel Mixer Faders
                         FaderBank(
-                            activePlaybacks = activePlaybacks,
+                            mixerSlots = mixerSlots,
+                            queueCount = mixerQueue.size,
                             faderVolumes = faderVolumes,
                             fineModeEnabled = settings.fineModeEnabled,
                             onFineModeToggle = { viewModel.updateSettings(settings.copy(fineModeEnabled = it)) },
@@ -304,9 +308,24 @@ fun MainScreen(
     editingCue?.let { cue ->
         CueEditorModal(
             cue = cue,
-            onSave = { viewModel.updateCue(it) },
-            onDelete = { viewModel.deleteCue(it) },
-            onDismiss = { editingCue = null }
+            onGetPeaks = { viewModel.getWaveformPeaks(it) },
+            onScrub = { posMs -> viewModel.scrubPreview(cue, posMs) },
+            onStartPreview = { startMs, endMs, onUpdate, onDone ->
+                viewModel.startPreview(cue, startMs, endMs, onUpdate, onDone)
+            },
+            onStopPreview = { viewModel.stopPreview() },
+            onSave = {
+                viewModel.stopPreview()
+                viewModel.updateCue(it)
+            },
+            onDelete = {
+                viewModel.stopPreview()
+                viewModel.deleteCue(it)
+            },
+            onDismiss = {
+                viewModel.stopPreview()
+                editingCue = null
+            }
         )
     }
 

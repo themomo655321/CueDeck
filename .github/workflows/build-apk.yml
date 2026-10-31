@@ -40,48 +40,42 @@ jobs:
       - name: Prepare APK Asset
         run: |
           mkdir -p release_assets
-          cp androidApp/build/outputs/apk/debug/androidApp-debug.apk release_assets/CueDeck-v1.0.3-debug.apk
+          cp androidApp/build/outputs/apk/debug/androidApp-debug.apk release_assets/CueDeck-v1.0.4-debug.apk
 
       - name: Upload APK as Workflow Artifact
         uses: actions/upload-artifact@v4
         with:
           name: CueDeck-debug-apk
-          path: release_assets/CueDeck-v1.0.3-debug.apk
+          path: release_assets/CueDeck-v1.0.4-debug.apk
           retention-days: 14
 
       - name: Create or Update GitHub Release
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: v1.0.3
-          name: "CueDeck v1.0.3 Preview APK"
+          tag_name: v1.0.4
+          name: "CueDeck v1.0.4 Preview APK"
           make_latest: true
           body: |
-            ### 🎛️ CueDeck v1.0.3 - Live Cue Trigger & Show Control
+            ### 🎛️ CueDeck v1.0.4 - Live Cue Trigger & Show Control
             Direct Android APK build for mobile & tablet testing (compatible with Android 11+ and ADVAN Sketsa 2).
             
-            #### 🛠️ What's New in v1.0.3:
-            - **Triple Fader Fine-Tuning**:
-              - **[FINE] Mode Toggle**: 4x precision gear ratio for lag-free, ultra-fine adjustments.
-              - **[+] and [−] Nudge Steppers**: Nudge volume by ±1% per tap or hold.
-              - **Horizontal-to-Fine Scrubbing**: Pulling sideways dynamically slows down fader speed with a `FINE 4X` indicator badge.
-              - Retained double-tap reset to 100% and quick MUTE toggle.
-            - **Project Audio Storage & Bloat Inspector**:
-              - Audio stored in device-accessible external storage (`/Android/data/com.cuedeck.app/files/shows/`).
-              - In-app storage manager showing path, total MB consumed, file roster with active/unused tags, "Open in System Files", and 1-tap "Purge Unused Audio".
-            - **Hardware Volume Buttons as Stage Remote**:
-              - Optional Settings toggle: Volume UP = GO, Volume DOWN = Panic Stop. Suppresses phone volume popups.
-            - **Interactive Waveform Display**:
-              - Waveform peak visualization in Cue Editor with draggable green `IN` and red `OUT` handles for non-destructive trimming.
-            - **Drive / Cloud Import Progress Bar**:
-              - Asynchronous streaming from Google Drive / storage with progress bar (`0%` → `100%`).
-            - **Focus-Loss Auto-Save & Session Recovery**:
-              - Automatically persists show and live session state (`session_state.json`) on `onPause()`/`onStop()`. Returning to the app restores all cues, active tab, and fader levels.
-            - **Diagnostics & Error Log Grabber**:
-              - In-app error console with a 1-tap **"Copy Error Log to Clipboard"** button.
-            - **Live Performance Enhancements**:
-              - **Keep Screen Awake** toggle (prevents sleep during shows).
-              - **Haptic Vibration** on GO, Panic, and pad triggers.
-              - **Zero-Latency Pre-Buffering** for the armed cue.
-          files: release_assets/CueDeck-v1.0.3-debug.apk
+            #### 🛠️ What's New in v1.0.4:
+            - **Panic Stop App-Kill Fix**:
+              - Completely resolved process termination on Panic Stop. Added safe coroutine job cancellation and defensive `MediaPlayer` state checks (`isReleased`), ensuring all audio fades out and stops instantly without closing the app.
+            - **Master Volume Double-Tap Reset**:
+              - Double-tapping the master volume icon or the readout in the top bar instantly snaps the master volume to 100% (Unity gain).
+            - **Real Audio Waveform Extraction**:
+              - Analyzes real acoustic peaks from audio files (WAV fast PCM, MP3/AAC/OGG via MediaCodec) into 100 normalized amplitude bars. Cached persistently to `.peaks` files for instant 0ms loads.
+            - **DJ-Style Audio Scrubbing & Cue Preview**:
+              - Integrated `[ ▶ PREVIEW ]` / `[ ⏸ STOP ]` button directly in the Cue Editor to audition trimmed audio with a real-time moving playhead.
+              - Real-time 40-60ms stutter/grain audio cueing when dragging the `IN` and `OUT` trim markers across the waveform.
+            - **Static 4-Channel Mixer Matrix & Overflow Queue**:
+              - Audio tracks stay pinned to their assigned fader slot (Channels 1-4) until playback completes.
+              - Finished tracks leave their channel in `[Standby]`, without shifting other active channels down.
+              - Extra tracks beyond 4 enter the overflow queue and automatically take over the next freed channel.
+            - **Cue Stack Smooth Scrolling & Auto-Tracking**:
+              - Fully scrollable cue list supporting deep shows with dozens of cues.
+              - Auto-scrolls to keep the armed cue centered in view during sequential firing.
+          files: release_assets/CueDeck-v1.0.4-debug.apk
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

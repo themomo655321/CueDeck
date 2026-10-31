@@ -20,6 +20,14 @@ class CueDeckViewModel(
 
     val activePlaybacks: StateFlow<List<ActivePlayback>> = audioEngine.activePlaybacks
 
+    // Fixed 4-slot mixer channels: tracks stay pinned to their slot until playback finishes
+    private val _mixerSlots = MutableStateFlow<List<ActivePlayback?>>(listOf(null, null, null, null))
+    val mixerSlots: StateFlow<List<ActivePlayback?>> = _mixerSlots.asStateFlow()
+
+    // Overflow queue for simultaneous audio beyond 4 channels
+    private val _mixerQueue = MutableStateFlow<List<ActivePlayback>>(emptyList())
+    val mixerQueue: StateFlow<List<ActivePlayback>> = _mixerQueue.asStateFlow()
+
     private val _settings = MutableStateFlow(AppSettings())
     val settings: StateFlow<AppSettings> = _settings.asStateFlow()
 
@@ -67,6 +75,68 @@ class CueDeckViewModel(
                 }
             }
         }
+
+        // Live mixer slot synchronization: pin audio to fixed channels 1-4 and manage overflow queue
+        coroutineScope.launch {
+            audioEngine.activePlaybacks.collect { activeList ->
+                syncMixerSlots(activeList)
+            }
+        }
+    }
+
+    private fun syncMixerSlots(activeList: List<ActivePlayback>) {
+        val currentSlots = _mixerSlots.value.toMutableList()
+        val currentQueue = _mixerQueue.value.toMutableList()
+        val activeMap = activeList.associateBy { it.playbackId }
+
+        // 1. Refresh active items in current slots, or clear vacated slots to null
+        for (i in 0..3) {
+            val track = currentSlots.getOrNull(i)
+            if (track != null) {
+                val updated = activeMap[track.playbackId]
+                if (updated != null) {
+                    currentSlots[i] = updated
+                } else {
+                    currentSlots[i] = null // Audio ended; slot is now free
+                }
+            }
+        }
+
+        // 2. Filter out finished items from the queue, update remaining
+        currentQueue.removeAll { it.playbackId !in activeMap }
+        for (i in currentQueue.indices) {
+            activeMap[currentQueue[i].playbackId]?.let { currentQueue[i] = it }
+        }
+
+        // 3. Find newly started tracks that aren't yet slotted or queued
+        val slottedIds = currentSlots.mapNotNull { it?.playbackId }.toSet()
+        val queuedIds = currentQueue.map { it.playbackId }.toSet()
+        val newTracks = activeList.filter { it.playbackId !in slottedIds && it.playbackId !in queuedIds }
+
+        for (newTrack in newTracks) {
+            val emptySlotIndex = currentSlots.indexOfFirst { it == null }
+            if (emptySlotIndex != -1) {
+                currentSlots[emptySlotIndex] = newTrack
+                val faderVol = _faderVolumes.value.getOrElse(emptySlotIndex) { 1.0f }
+                audioEngine.setTrackVolume(newTrack.playbackId, faderVol, 0L)
+            } else {
+                currentQueue.add(newTrack)
+            }
+        }
+
+        // 4. If slots became free and queue has waiting tracks, assign to freed slots
+        while (currentQueue.isNotEmpty() && currentSlots.any { it == null }) {
+            val nextTrack = currentQueue.removeAt(0)
+            val freeIndex = currentSlots.indexOfFirst { it == null }
+            if (freeIndex != -1) {
+                currentSlots[freeIndex] = nextTrack
+                val faderVol = _faderVolumes.value.getOrElse(freeIndex) { 1.0f }
+                audioEngine.setTrackVolume(nextTrack.playbackId, faderVol, 0L)
+            }
+        }
+
+        _mixerSlots.value = currentSlots
+        _mixerQueue.value = currentQueue
     }
 
     private fun preloadArmedCue(cue: Cue, showId: String) {
@@ -216,11 +286,38 @@ class CueDeckViewModel(
             list[channelIndex] = clamped
             _faderVolumes.value = list
 
-            val activeTrack = activePlaybacks.value.getOrNull(channelIndex)
+            val activeTrack = _mixerSlots.value.getOrNull(channelIndex)
             if (activeTrack != null) {
                 audioEngine.setTrackVolume(activeTrack.playbackId, clamped, _settings.value.faderSmoothingMs)
             }
         }
+    }
+
+    suspend fun getWaveformPeaks(cue: Cue, peakCount: Int = 100): List<Float> {
+        val basePath = repository.getBasePath(_show.value.id)
+        return audioEngine.getWaveformPeaks(cue, basePath, peakCount)
+    }
+
+    fun scrubPreview(cue: Cue, positionMs: Long) {
+        val basePath = repository.getBasePath(_show.value.id)
+        audioEngine.scrubAt(cue, basePath, positionMs)
+    }
+
+    fun startPreview(
+        cue: Cue,
+        startMs: Long,
+        endMs: Long,
+        onPositionUpdate: (Long) -> Unit,
+        onCompleted: () -> Unit
+    ) {
+        coroutineScope.launch {
+            val basePath = repository.getBasePath(_show.value.id)
+            audioEngine.startPreview(cue, basePath, startMs, endMs, onPositionUpdate, onCompleted)
+        }
+    }
+
+    fun stopPreview() {
+        audioEngine.stopPreview()
     }
 
     fun updateSettings(newSettings: AppSettings) {

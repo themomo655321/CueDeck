@@ -11,6 +11,8 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.material.icons.filled.Stop
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -39,6 +41,10 @@ val PRESET_COLORS = listOf(
 @Composable
 fun CueEditorModal(
     cue: Cue,
+    onGetPeaks: (suspend (Cue) -> List<Float>)? = null,
+    onScrub: ((Long) -> Unit)? = null,
+    onStartPreview: ((startMs: Long, endMs: Long, onUpdate: (Long) -> Unit, onDone: () -> Unit) -> Unit)? = null,
+    onStopPreview: (() -> Unit)? = null,
     onSave: (Cue) -> Unit,
     onDelete: (String) -> Unit,
     onDismiss: () -> Unit
@@ -56,6 +62,22 @@ fun CueEditorModal(
     var followAction by remember { mutableStateOf(cue.followAction) }
     var selectedColor by remember { mutableStateOf(cue.colorHex) }
     var notes by remember { mutableStateOf(cue.notes) }
+
+    var isPreviewing by remember { mutableStateOf(false) }
+    var previewProgressSec by remember { mutableStateOf<Float?>(null) }
+    var peaks by remember(cue.id) { mutableStateOf<List<Float>>(emptyList()) }
+
+    LaunchedEffect(cue.id) {
+        if (onGetPeaks != null) {
+            peaks = onGetPeaks(cue)
+        }
+    }
+
+    DisposableEffect(Unit) {
+        onDispose {
+            onStopPreview?.invoke()
+        }
+    }
 
     val totalDurationSec = (cue.durationMs / 1000f).coerceAtLeast(1f)
 
@@ -121,14 +143,72 @@ fun CueEditorModal(
 
             Spacer(modifier = Modifier.height(16.dp))
 
-            // Non-Destructive Audio Trimming Waveform
-            Text("Non-Destructive Trimming", fontWeight = FontWeight.Bold, fontSize = 13.sp, color = Color.LightGray)
+            // Non-Destructive Audio Trimming Waveform Header with Play/Stop Preview
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween,
+                modifier = Modifier.fillMaxWidth().padding(bottom = 4.dp)
+            ) {
+                Text(
+                    text = "Non-Destructive Trimming",
+                    fontWeight = FontWeight.Bold,
+                    fontSize = 13.sp,
+                    color = Color.LightGray
+                )
+
+                // Play / Stop Preview Button
+                Button(
+                    onClick = {
+                        if (isPreviewing) {
+                            isPreviewing = false
+                            previewProgressSec = null
+                            onStopPreview?.invoke()
+                        } else {
+                            isPreviewing = true
+                            val startMs = (inPointSec * 1000L).toLong()
+                            val endMs = (outPointSec * 1000L).toLong()
+                            onStartPreview?.invoke(
+                                startMs,
+                                endMs,
+                                { currentMs -> previewProgressSec = currentMs / 1000f },
+                                {
+                                    isPreviewing = false
+                                    previewProgressSec = null
+                                }
+                            )
+                        }
+                    },
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = if (isPreviewing) Color(0xFFFF5252) else Color(0xFF00E5FF),
+                        contentColor = Color.Black
+                    ),
+                    shape = RoundedCornerShape(6.dp),
+                    contentPadding = PaddingValues(horizontal = 8.dp, vertical = 2.dp),
+                    modifier = Modifier.height(28.dp)
+                ) {
+                    Icon(
+                        imageVector = if (isPreviewing) Icons.Default.Stop else Icons.Default.PlayArrow,
+                        contentDescription = if (isPreviewing) "Stop Preview" else "Preview",
+                        modifier = Modifier.size(16.dp)
+                    )
+                    Spacer(modifier = Modifier.width(4.dp))
+                    Text(
+                        text = if (isPreviewing) "STOP" else "PREVIEW",
+                        fontSize = 11.sp,
+                        fontWeight = FontWeight.Black
+                    )
+                }
+            }
+
             Spacer(modifier = Modifier.height(4.dp))
             WaveformTrimView(
                 cueId = cue.id,
                 inPointSec = inPointSec,
                 outPointSec = outPointSec,
                 totalDurationSec = totalDurationSec,
+                peaks = peaks,
+                previewProgressSec = previewProgressSec,
+                onScrub = { sec -> onScrub?.invoke((sec * 1000L).toLong()) },
                 onInPointChange = { inPointSec = it },
                 onOutPointChange = { outPointSec = it }
             )

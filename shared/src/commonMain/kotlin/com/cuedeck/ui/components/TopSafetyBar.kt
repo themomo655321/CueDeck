@@ -2,7 +2,9 @@ package com.cuedeck.ui.components
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
@@ -12,6 +14,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -120,14 +123,22 @@ fun TopSafetyBar(
                         )
                     }
 
-                    // Volume trigger
-                    IconButton(
-                        onClick = { showVolumePopup = !showVolumePopup },
-                        modifier = Modifier.size(38.dp)
+                    // Volume trigger with double-tap to reset to 100%
+                    Box(
+                        contentAlignment = Alignment.Center,
+                        modifier = Modifier
+                            .size(38.dp)
+                            .clip(CircleShape)
+                            .pointerInput(Unit) {
+                                detectTapGestures(
+                                    onTap = { showVolumePopup = !showVolumePopup },
+                                    onDoubleTap = { onVolumeChange(1.0f) }
+                                )
+                            }
                     ) {
                         Icon(
                             imageVector = if (masterVolume > 0f) Icons.Default.VolumeUp else Icons.Default.VolumeOff,
-                            contentDescription = "Master Volume",
+                            contentDescription = "Master Volume (Double-tap to 100%)",
                             tint = Color.White
                         )
                     }
@@ -169,7 +180,25 @@ fun TopSafetyBar(
                         .fillMaxWidth()
                         .padding(top = 6.dp)
                 ) {
-                    Text("Master: ${(masterVolume * 100).toInt()}%", fontSize = 12.sp, color = Color.Gray)
+                    Box(
+                        modifier = Modifier
+                            .clip(RoundedCornerShape(4.dp))
+                            .background(Color(0xFF262626))
+                            .pointerInput(Unit) {
+                                detectTapGestures(
+                                    onTap = { onVolumeChange(1.0f) },
+                                    onDoubleTap = { onVolumeChange(1.0f) }
+                                )
+                            }
+                            .padding(horizontal = 6.dp, vertical = 3.dp)
+                    ) {
+                        Text(
+                            text = "Master: ${(masterVolume * 100).toInt()}% [100%]",
+                            fontSize = 11.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = if ((masterVolume * 100).toInt() == 100) Color(0xFF00E5FF) else Color.LightGray
+                        )
+                    }
                     Slider(
                         value = masterVolume,
                         onValueChange = onVolumeChange,

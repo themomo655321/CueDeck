@@ -55,6 +55,33 @@ interface AudioEngine {
     fun preload(cue: Cue, basePath: String) {}
 
     /**
+     * Extracts normalized acoustic amplitude peaks (0.0f..1.0f) for real waveform rendering.
+     */
+    suspend fun getWaveformPeaks(cue: Cue, basePath: String, peakCount: Int = 100): List<Float> = emptyList()
+
+    /**
+     * DJ-style scrub audio cueing: plays a short ~40-60ms audio grain at positionMs.
+     */
+    fun scrubAt(cue: Cue, basePath: String, positionMs: Long) {}
+
+    /**
+     * Auditions/previews a cue between startMs and endMs.
+     */
+    suspend fun startPreview(
+        cue: Cue,
+        basePath: String,
+        startMs: Long,
+        endMs: Long,
+        onPositionUpdate: (Long) -> Unit,
+        onCompleted: () -> Unit
+    ) {}
+
+    /**
+     * Stops any running preview playback.
+     */
+    fun stopPreview() {}
+
+    /**
      * Releases all audio resources and worker threads.
      */
     fun release()

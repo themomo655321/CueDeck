@@ -25,7 +25,8 @@ import kotlin.math.sin
 
 /**
  * Interactive Audio Waveform Editor for Non-Destructive Trimming.
- * Displays audio amplitude bars with draggable IN (green) and OUT (red) boundary handles.
+ * Displays real amplitude bars, draggable IN/OUT boundary handles,
+ * live moving playhead during preview, and DJ-style scrub audio cueing.
  */
 @Composable
 fun WaveformTrimView(
@@ -33,22 +34,26 @@ fun WaveformTrimView(
     inPointSec: Float,
     outPointSec: Float,
     totalDurationSec: Float,
+    peaks: List<Float> = emptyList(),
+    previewProgressSec: Float? = null,
+    onScrub: ((Float) -> Unit)? = null,
     onInPointChange: (Float) -> Unit,
     onOutPointChange: (Float) -> Unit,
     modifier: Modifier = Modifier
 ) {
     val duration = totalDurationSec.coerceAtLeast(0.5f)
 
-    // Generate consistent, realistic amplitude peaks for this audio cue
-    val peakCount = 70
-    val peaks = remember(cueId) {
+    // Fallback baseline peaks if real peaks are still extracting
+    val fallbackPeaks = remember(cueId) {
         val seed = cueId.hashCode()
-        FloatArray(peakCount) { i ->
+        List(70) { i ->
             val angle = i * 0.18f + (seed % 100) * 0.1f
             val base = abs(sin(angle) * 0.7f + sin(angle * 2.3f) * 0.3f)
             (base * 0.85f + 0.15f).coerceIn(0.12f, 0.98f)
         }
     }
+
+    val displayPeaks = if (peaks.isNotEmpty()) peaks else fallbackPeaks
 
     Column(
         modifier = modifier
@@ -93,13 +98,12 @@ fun WaveformTrimView(
         BoxWithConstraints(
             modifier = Modifier
                 .fillMaxWidth()
-                .height(80.dp)
+                .height(84.dp)
                 .clip(RoundedCornerShape(6.dp))
                 .background(Color(0xFF0D0D0D))
         ) {
             val parentMaxWidth = maxWidth
             val widthPx = constraints.maxWidth.toFloat()
-            val heightPx = constraints.maxHeight.toFloat()
 
             var activeDragHandle by remember { mutableStateOf<String?>(null) } // "IN", "OUT", or null
 
@@ -119,7 +123,6 @@ fun WaveformTrimView(
                                 } else if (distOut < 80f) {
                                     "OUT"
                                 } else {
-                                    // Closer handle
                                     if (distIn < distOut) "IN" else "OUT"
                                 }
                             },
@@ -128,12 +131,15 @@ fun WaveformTrimView(
                             onDrag = { change, _ ->
                                 change.consume()
                                 val newSec = ((change.position.x / widthPx) * duration).coerceIn(0f, duration)
+                                val clampedSec = (newSec * 10).toInt() / 10f
                                 if (activeDragHandle == "IN") {
-                                    val clamped = newSec.coerceAtMost((outPointSec - 0.1f).coerceAtLeast(0f))
-                                    onInPointChange((clamped * 10).toInt() / 10f)
+                                    val clamped = clampedSec.coerceAtMost((outPointSec - 0.1f).coerceAtLeast(0f))
+                                    onInPointChange(clamped)
+                                    onScrub?.invoke(clamped)
                                 } else if (activeDragHandle == "OUT") {
-                                    val clamped = newSec.coerceAtLeast((inPointSec + 0.1f).coerceAtMost(duration))
-                                    onOutPointChange((clamped * 10).toInt() / 10f)
+                                    val clamped = clampedSec.coerceAtLeast((inPointSec + 0.1f).coerceAtMost(duration))
+                                    onOutPointChange(clamped)
+                                    onScrub?.invoke(clamped)
                                 }
                             }
                         )
@@ -161,21 +167,22 @@ fun WaveformTrimView(
                         )
                     }
 
-                    // Active highlight region
+                    // Active highlighted region
                     drawRect(
                         color = Color(0x1A00E5FF),
                         topLeft = Offset(inX, 0f),
-                        size = Size(outX - inX, size.height)
+                        size = Size((outX - inX).coerceAtLeast(0f), size.height)
                     )
 
                     // Draw amplitude peak bars
+                    val peakCount = displayPeaks.size
                     val step = size.width / peakCount
                     val midY = size.height / 2f
-                    peaks.forEachIndexed { i, peak ->
+                    displayPeaks.forEachIndexed { i, peak ->
                         val barX = i * step + (step / 2f)
                         val barHeight = peak * (size.height * 0.78f)
                         val isInActive = barX in inX..outX
-                        val barColor = if (isInActive) Color(0xFF00E5FF) else Color(0xFF444444)
+                        val barColor = if (isInActive) Color(0xFF00E5FF) else Color(0xFF383838)
 
                         drawLine(
                             color = barColor,
@@ -201,6 +208,23 @@ fun WaveformTrimView(
                         end = Offset(outX, size.height),
                         strokeWidth = 3.dp.toPx()
                     )
+
+                    // DJ Playhead line during preview
+                    previewProgressSec?.let { pSec ->
+                        val playheadFraction = (pSec / duration).coerceIn(0f, 1f)
+                        val playheadX = playheadFraction * size.width
+                        drawLine(
+                            color = Color.White,
+                            start = Offset(playheadX, 0f),
+                            end = Offset(playheadX, size.height),
+                            strokeWidth = 2.5.dp.toPx()
+                        )
+                        drawCircle(
+                            color = Color(0xFF00E5FF),
+                            radius = 4.dp.toPx(),
+                            center = Offset(playheadX, size.height / 2f)
+                        )
+                    }
                 }
 
                 // IN Handle Flag

@@ -42,7 +42,8 @@ import kotlin.math.roundToInt
  */
 @Composable
 fun FaderBank(
-    activePlaybacks: List<ActivePlayback>,
+    mixerSlots: List<ActivePlayback?>,
+    queueCount: Int = 0,
     faderVolumes: List<Float>,
     fineModeEnabled: Boolean = false,
     onFineModeToggle: (Boolean) -> Unit = {},
@@ -98,11 +99,13 @@ fun FaderBank(
                     }
                 }
 
+                val activeCount = mixerSlots.count { it != null }
+                val activeText = if (queueCount > 0) "ACTIVE: $activeCount/4 (+$queueCount QUEUED)" else "ACTIVE: $activeCount/4"
                 Text(
-                    text = "ACTIVE: ${activePlaybacks.size.coerceAtMost(4)}/4",
+                    text = activeText,
                     fontSize = 10.sp,
                     fontWeight = FontWeight.SemiBold,
-                    color = if (activePlaybacks.isNotEmpty()) Color(0xFF4CAF50) else Color(0xFF777777)
+                    color = if (activeCount > 0) Color(0xFF4CAF50) else Color(0xFF777777)
                 )
             }
 
@@ -116,7 +119,7 @@ fun FaderBank(
                     .height(180.dp)
             ) {
                 for (ch in 0..3) {
-                    val activeTrack = activePlaybacks.getOrNull(ch)
+                    val activeTrack = mixerSlots.getOrNull(ch)
                     val volume = faderVolumes.getOrNull(ch) ?: 1.0f
 
                     FaderChannelStrip(
