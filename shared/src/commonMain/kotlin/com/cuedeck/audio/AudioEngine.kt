@@ -82,6 +82,11 @@ interface AudioEngine {
     fun stopPreview() {}
 
     /**
+     * Checks if preview playback is currently running.
+     */
+    fun isPreviewing(): Boolean = false
+
+    /**
      * Releases all audio resources and worker threads.
      */
     fun release()
