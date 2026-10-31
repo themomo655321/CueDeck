@@ -209,51 +209,6 @@ fun TopSafetyBar(
                     )
                 }
             }
-
-            // View Mode Tab Switcher
-            Spacer(modifier = Modifier.height(6.dp))
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(34.dp)
-                    .clip(RoundedCornerShape(8.dp))
-                    .background(Color(0xFF161616))
-                    .padding(2.dp)
-            ) {
-                Box(
-                    contentAlignment = Alignment.Center,
-                    modifier = Modifier
-                        .weight(1f)
-                        .fillMaxHeight()
-                        .clip(RoundedCornerShape(6.dp))
-                        .background(if (viewMode == ViewMode.CUE_LIST) Color(0xFF333333) else Color.Transparent)
-                        .clickable { onViewModeChange(ViewMode.CUE_LIST) }
-                ) {
-                    Text(
-                        text = "CUE STACK (GO)",
-                        fontSize = 12.sp,
-                        fontWeight = if (viewMode == ViewMode.CUE_LIST) FontWeight.Bold else FontWeight.Normal,
-                        color = if (viewMode == ViewMode.CUE_LIST) Color.White else Color.Gray
-                    )
-                }
-
-                Box(
-                    contentAlignment = Alignment.Center,
-                    modifier = Modifier
-                        .weight(1f)
-                        .fillMaxHeight()
-                        .clip(RoundedCornerShape(6.dp))
-                        .background(if (viewMode == ViewMode.CART_MATRIX) Color(0xFF333333) else Color.Transparent)
-                        .clickable { onViewModeChange(ViewMode.CART_MATRIX) }
-                ) {
-                    Text(
-                        text = "SOUNDBOARD (PADS)",
-                        fontSize = 12.sp,
-                        fontWeight = if (viewMode == ViewMode.CART_MATRIX) FontWeight.Bold else FontWeight.Normal,
-                        color = if (viewMode == ViewMode.CART_MATRIX) Color.White else Color.Gray
-                    )
-                }
-            }
         }
     }
 }

@@ -215,8 +215,30 @@ fun CueEditorModal(
 
             Spacer(modifier = Modifier.height(12.dp))
 
-            // Volume & Fades
-            Text("Volume & Fades", fontWeight = FontWeight.Bold, fontSize = 13.sp, color = Color.LightGray)
+            // Volume & Fades with Auto-Gain Normalize
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween,
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Text("Volume & Fades", fontWeight = FontWeight.Bold, fontSize = 13.sp, color = Color.LightGray)
+
+                OutlinedButton(
+                    onClick = {
+                        val maxPeak = peaks.maxOrNull() ?: 1.0f
+                        if (maxPeak > 0.05f) {
+                            val normalized = (0.95f / maxPeak).coerceIn(0.2f, 1.5f)
+                            volume = (normalized * 100).toInt() / 100f
+                        }
+                    },
+                    shape = RoundedCornerShape(4.dp),
+                    contentPadding = PaddingValues(horizontal = 6.dp, vertical = 2.dp),
+                    modifier = Modifier.height(26.dp)
+                ) {
+                    Text("⚖ NORMALIZE GAIN", fontSize = 10.sp, fontWeight = FontWeight.Bold, color = Color(0xFF00E5FF))
+                }
+            }
+            Spacer(modifier = Modifier.height(4.dp))
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Text("Gain: ${(volume * 100).toInt()}%", fontSize = 12.sp, color = Color.Gray, modifier = Modifier.width(70.dp))
                 Slider(

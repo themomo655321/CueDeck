@@ -43,6 +43,7 @@ fun MainScreen(
     val errorLogs by ErrorLogger.logs.collectAsState()
 
     var editingCue by remember { mutableStateOf<Cue?>(null) }
+    var showImportChoiceDialog by remember { mutableStateOf(false) }
     var assigningSlotIndex by remember { mutableStateOf<Int?>(null) }
     var showSettingsModal by remember { mutableStateOf(false) }
     var showStorageModal by remember { mutableStateOf(false) }
@@ -50,10 +51,12 @@ fun MainScreen(
 
     val armedCue = show.findCue(show.armedCueId) ?: show.cues.firstOrNull()
 
+    val screenBg = if (settings.isHighContrastStageTheme) Color(0xFF0D0303) else DarkBackground
+
     BoxWithConstraints(
         modifier = modifier
             .fillMaxSize()
-            .background(DarkBackground)
+            .background(screenBg)
     ) {
         val isWideScreen = maxWidth > 650.dp // Tablet or landscape orientation
 
@@ -95,50 +98,26 @@ fun MainScreen(
             }
 
             if (isWideScreen) {
-                // Tablet Dual-Pane Layout (ADVAN Sketsa 2 10.1" landscape / desktop)
+                // Landscape Dual-Pane Layout (Tablet / Rotated Phone)
+                // Left: Now Playing + 4 Fader Channels; Right: Standby + Cue Stack + GO Button
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
                         .weight(1f)
-                        .padding(12.dp),
-                    horizontalArrangement = Arrangement.spacedBy(12.dp)
+                        .padding(8.dp),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
-                    // Left Column: Cue List or Soundboard Matrix + 4 Faders
+                    // Left Column: Now Playing Active Drawer + 4 Mixer Faders
                     Column(
-                        verticalArrangement = Arrangement.spacedBy(8.dp),
-                        modifier = Modifier.weight(1.3f).fillMaxHeight()
+                        verticalArrangement = Arrangement.spacedBy(6.dp),
+                        modifier = Modifier.weight(1f).fillMaxHeight()
                     ) {
-                        Box(modifier = Modifier.weight(1f)) {
-                            when (show.currentViewMode) {
-                                ViewMode.CUE_LIST -> {
-                                    CueListSection(
-                                        cues = show.cues,
-                                        armedCueId = armedCue?.id,
-                                        isPerformanceLocked = show.isPerformanceLocked,
-                                        onArmCue = { viewModel.armCue(it) },
-                                        onEditCue = { editingCue = it },
-                                        onAddCueClick = onImportAudioRequest
-                                    )
-                                }
-                                ViewMode.CART_MATRIX -> {
-                                    CartGridSection(
-                                        banks = show.cartBanks,
-                                        activeBankIndex = show.activeBankIndex,
-                                        cartPageIndex = cartPageIndex,
-                                        cues = show.cues,
-                                        activePlaybacks = activePlaybacks,
-                                        isPerformanceLocked = show.isPerformanceLocked,
-                                        onSelectBank = { viewModel.setActiveBank(it) },
-                                        onPrevPage = { viewModel.prevCartPage() },
-                                        onNextPage = { viewModel.nextCartPage() },
-                                        onTriggerSlot = { viewModel.triggerCartSlot(it) },
-                                        onAssignSlot = { assigningSlotIndex = it }
-                                    )
-                                }
-                            }
-                        }
+                        ActiveCuesDrawer(
+                            activePlaybacks = activePlaybacks,
+                            onStopCue = { id, fade -> viewModel.stopActivePlayback(id, fade) },
+                            modifier = Modifier.weight(1f)
+                        )
 
-                        // 4 Live Mixer Faders on Tablet
                         FaderBank(
                             mixerSlots = mixerSlots,
                             queueCount = mixerQueue.size,
@@ -149,93 +128,103 @@ fun MainScreen(
                         )
                     }
 
-                    // Right Column: Armed Standby, Active Countdown, Big GO
+                    // Right Column: Armed Standby + Full Height Cue Stack + GO Button
                     Column(
-                        verticalArrangement = Arrangement.SpaceBetween,
-                        modifier = Modifier.weight(1f).fillMaxHeight()
+                        verticalArrangement = Arrangement.spacedBy(6.dp),
+                        modifier = Modifier.weight(1.3f).fillMaxHeight()
                     ) {
-                        Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                            ArmedCueCard(armedCue = armedCue)
-                            ActiveCuesDrawer(
-                                activePlaybacks = activePlaybacks,
-                                onStopCue = { id, fade -> viewModel.stopActivePlayback(id, fade) }
-                            )
-                        }
+                        ArmedCueCard(armedCue = armedCue)
+
+                        CueListSection(
+                            cues = show.cues,
+                            armedCueId = armedCue?.id,
+                            isPerformanceLocked = show.isPerformanceLocked,
+                            onArmCue = { viewModel.armCue(it) },
+                            onEditCue = { editingCue = it },
+                            onAddCueClick = { showImportChoiceDialog = true },
+                            onMoveUp = { viewModel.moveCueUp(it) },
+                            onMoveDown = { viewModel.moveCueDown(it) },
+                            modifier = Modifier.weight(1f).fillMaxWidth()
+                        )
 
                         GoButton(
                             armedCue = armedCue,
-                            onGoClick = { viewModel.pressGo() }
+                            onGoClick = { viewModel.pressGo() },
+                            modifier = Modifier.fillMaxWidth().height(64.dp)
                         )
                     }
                 }
             } else {
-                // Mobile Portrait Layout (Phone)
+                // Mobile Portrait Split-Screen Layout (Phone)
+                // Left: Now Playing & Standby; Right: Full-Height Cue Stack; Bottom: Faders + Full-Width GO
                 Column(
                     modifier = Modifier
                         .fillMaxSize()
-                        .padding(horizontal = 12.dp, vertical = 6.dp),
+                        .padding(horizontal = 6.dp, vertical = 4.dp),
                     verticalArrangement = Arrangement.SpaceBetween
                 ) {
-                    Column(
-                        modifier = Modifier.weight(1f),
-                        verticalArrangement = Arrangement.spacedBy(6.dp)
+                    // Middle Split Screen: Left (Now Playing & Standby) vs Right (Cue Stack)
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .weight(1f),
+                        horizontalArrangement = Arrangement.spacedBy(6.dp)
                     ) {
-                        ArmedCueCard(armedCue = armedCue)
+                        // Left Column: Armed Standby Card + Now Playing Active Drawer
+                        Column(
+                            modifier = Modifier
+                                .weight(0.95f)
+                                .fillMaxHeight(),
+                            verticalArrangement = Arrangement.spacedBy(6.dp)
+                        ) {
+                            ArmedCueCard(armedCue = armedCue)
 
-                        ActiveCuesDrawer(
-                            activePlaybacks = activePlaybacks,
-                            onStopCue = { id, fade -> viewModel.stopActivePlayback(id, fade) }
-                        )
-
-                        // Middle Content Section
-                        Box(modifier = Modifier.weight(1f)) {
-                            when (show.currentViewMode) {
-                                ViewMode.CUE_LIST -> {
-                                    CueListSection(
-                                        cues = show.cues,
-                                        armedCueId = armedCue?.id,
-                                        isPerformanceLocked = show.isPerformanceLocked,
-                                        onArmCue = { viewModel.armCue(it) },
-                                        onEditCue = { editingCue = it },
-                                        onAddCueClick = onImportAudioRequest,
-                                        modifier = Modifier.fillMaxSize()
-                                    )
-                                }
-                                ViewMode.CART_MATRIX -> {
-                                    CartGridSection(
-                                        banks = show.cartBanks,
-                                        activeBankIndex = show.activeBankIndex,
-                                        cartPageIndex = cartPageIndex,
-                                        cues = show.cues,
-                                        activePlaybacks = activePlaybacks,
-                                        isPerformanceLocked = show.isPerformanceLocked,
-                                        onSelectBank = { viewModel.setActiveBank(it) },
-                                        onPrevPage = { viewModel.prevCartPage() },
-                                        onNextPage = { viewModel.nextCartPage() },
-                                        onTriggerSlot = { viewModel.triggerCartSlot(it) },
-                                        onAssignSlot = { assigningSlotIndex = it },
-                                        modifier = Modifier.fillMaxWidth()
-                                    )
-                                }
-                            }
+                            ActiveCuesDrawer(
+                                activePlaybacks = activePlaybacks,
+                                onStopCue = { id, fade -> viewModel.stopActivePlayback(id, fade) },
+                                modifier = Modifier.weight(1f)
+                            )
                         }
 
-                        // 4 Channel Mixer Faders
-                        FaderBank(
-                            mixerSlots = mixerSlots,
-                            queueCount = mixerQueue.size,
-                            faderVolumes = faderVolumes,
-                            fineModeEnabled = settings.fineModeEnabled,
-                            onFineModeToggle = { viewModel.updateSettings(settings.copy(fineModeEnabled = it)) },
-                            onFaderChange = { ch, vol -> viewModel.setFaderVolume(ch, vol) }
-                        )
+                        // Right Column: Dedicated Full Height Cue Stack
+                        Box(
+                            modifier = Modifier
+                                .weight(1.05f)
+                                .fillMaxHeight()
+                        ) {
+                            CueListSection(
+                                cues = show.cues,
+                                armedCueId = armedCue?.id,
+                                isPerformanceLocked = show.isPerformanceLocked,
+                                onArmCue = { viewModel.armCue(it) },
+                                onEditCue = { editingCue = it },
+                                onAddCueClick = { showImportChoiceDialog = true },
+                                onMoveUp = { viewModel.moveCueUp(it) },
+                                onMoveDown = { viewModel.moveCueDown(it) },
+                                modifier = Modifier.fillMaxSize()
+                            )
+                        }
                     }
 
-                    // Persistent Giant GO Button at bottom
+                    Spacer(modifier = Modifier.height(4.dp))
+
+                    // 4 Channel Mixer Faders
+                    FaderBank(
+                        mixerSlots = mixerSlots,
+                        queueCount = mixerQueue.size,
+                        faderVolumes = faderVolumes,
+                        fineModeEnabled = settings.fineModeEnabled,
+                        onFineModeToggle = { viewModel.updateSettings(settings.copy(fineModeEnabled = it)) },
+                        onFaderChange = { ch, vol -> viewModel.setFaderVolume(ch, vol) }
+                    )
+
+                    // Persistent Full-Width Giant GO Button at bottom
                     GoButton(
                         armedCue = armedCue,
                         onGoClick = { viewModel.pressGo() },
-                        modifier = Modifier.padding(top = 6.dp)
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(top = 4.dp)
                     )
                 }
             }
@@ -301,6 +290,15 @@ fun MainScreen(
                 }
             },
             confirmButton = {}
+        )
+    }
+
+    // Dialog: Import Audio (Local File vs Web Link)
+    if (showImportChoiceDialog) {
+        ImportAudioDialog(
+            onImportLocalFile = onImportAudioRequest,
+            onImportUrl = { viewModel.importFromUrl(it) },
+            onDismiss = { showImportChoiceDialog = false }
         )
     }
 

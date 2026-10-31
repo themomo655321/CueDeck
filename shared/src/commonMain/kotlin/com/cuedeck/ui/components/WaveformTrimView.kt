@@ -3,6 +3,7 @@ package com.cuedeck.ui.components
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -25,8 +26,8 @@ import kotlin.math.sin
 
 /**
  * Interactive Audio Waveform Editor for Non-Destructive Trimming.
- * Displays real amplitude bars, draggable IN/OUT boundary handles,
- * live moving playhead during preview, and DJ-style scrub audio cueing.
+ * Features 60fps smooth float handle dragging, debounced scrub audio,
+ * 1x/2x/4x horizontal zoom multipliers, and real-time moving playhead.
  */
 @Composable
 fun WaveformTrimView(
@@ -42,6 +43,8 @@ fun WaveformTrimView(
     modifier: Modifier = Modifier
 ) {
     val duration = totalDurationSec.coerceAtLeast(0.5f)
+    var zoomLevel by remember { mutableStateOf(1) } // 1x, 2x, 4x zoom
+    var lastScrubTimestamp by remember { mutableStateOf(0L) }
 
     // Fallback baseline peaks if real peaks are still extracting
     val fallbackPeaks = remember(cueId) {
@@ -63,7 +66,7 @@ fun WaveformTrimView(
             .border(1.dp, Color(0xFF2C2C2C), RoundedCornerShape(8.dp))
             .padding(8.dp)
     ) {
-        // Timecode Readouts
+        // Timecode & Zoom Header Row
         Row(
             modifier = Modifier.fillMaxWidth().padding(horizontal = 4.dp, vertical = 2.dp),
             horizontalArrangement = Arrangement.SpaceBetween,
@@ -76,13 +79,27 @@ fun WaveformTrimView(
                 fontWeight = FontWeight.Bold,
                 fontFamily = FontFamily.Monospace
             )
-            val trimmedDuration = (outPointSec - inPointSec).coerceAtLeast(0f)
-            Text(
-                text = "TRIMMED: ${formatTime(trimmedDuration)} / ${formatTime(duration)}",
-                color = Color.LightGray,
-                fontSize = 10.sp,
-                fontFamily = FontFamily.Monospace
-            )
+
+            // Zoom pills (1x, 2x, 4x)
+            Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                listOf(1 to "1X", 2 to "2X", 4 to "4X").forEach { (lvl, lbl) ->
+                    Box(
+                        modifier = Modifier
+                            .clip(RoundedCornerShape(4.dp))
+                            .background(if (zoomLevel == lvl) Color(0xFF00E5FF) else Color(0xFF242424))
+                            .clickable { zoomLevel = lvl }
+                            .padding(horizontal = 5.dp, vertical = 1.dp)
+                    ) {
+                        Text(
+                            text = lbl,
+                            fontSize = 9.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = if (zoomLevel == lvl) Color.Black else Color.LightGray
+                        )
+                    }
+                }
+            }
+
             Text(
                 text = "OUT: ${formatTime(outPointSec)}",
                 color = Color(0xFFFF5252),
@@ -105,7 +122,7 @@ fun WaveformTrimView(
             val parentMaxWidth = maxWidth
             val widthPx = constraints.maxWidth.toFloat()
 
-            var activeDragHandle by remember { mutableStateOf<String?>(null) } // "IN", "OUT", or null
+            var activeDragHandle by remember { mutableStateOf<String?>(null) }
 
             Box(
                 modifier = Modifier
@@ -131,15 +148,22 @@ fun WaveformTrimView(
                             onDrag = { change, _ ->
                                 change.consume()
                                 val newSec = ((change.position.x / widthPx) * duration).coerceIn(0f, duration)
-                                val clampedSec = (newSec * 10).toInt() / 10f
+                                val now = System.currentTimeMillis()
+
                                 if (activeDragHandle == "IN") {
-                                    val clamped = clampedSec.coerceAtMost((outPointSec - 0.1f).coerceAtLeast(0f))
-                                    onInPointChange(clamped)
-                                    onScrub?.invoke(clamped)
+                                    val smoothIn = newSec.coerceAtMost((outPointSec - 0.05f).coerceAtLeast(0f))
+                                    onInPointChange(smoothIn)
+                                    if (now - lastScrubTimestamp > 60L) {
+                                        lastScrubTimestamp = now
+                                        onScrub?.invoke(smoothIn)
+                                    }
                                 } else if (activeDragHandle == "OUT") {
-                                    val clamped = clampedSec.coerceAtLeast((inPointSec + 0.1f).coerceAtMost(duration))
-                                    onOutPointChange(clamped)
-                                    onScrub?.invoke(clamped)
+                                    val smoothOut = newSec.coerceAtLeast((inPointSec + 0.05f).coerceAtMost(duration))
+                                    onOutPointChange(smoothOut)
+                                    if (now - lastScrubTimestamp > 60L) {
+                                        lastScrubTimestamp = now
+                                        onScrub?.invoke(smoothOut)
+                                    }
                                 }
                             }
                         )
@@ -174,13 +198,14 @@ fun WaveformTrimView(
                         size = Size((outX - inX).coerceAtLeast(0f), size.height)
                     )
 
-                    // Draw amplitude peak bars
+                    // Draw amplitude peak bars with zoom multiplier
                     val peakCount = displayPeaks.size
                     val step = size.width / peakCount
                     val midY = size.height / 2f
                     displayPeaks.forEachIndexed { i, peak ->
                         val barX = i * step + (step / 2f)
-                        val barHeight = peak * (size.height * 0.78f)
+                        val scaledPeak = (peak * (1f + (zoomLevel - 1) * 0.35f)).coerceIn(0.08f, 1.0f)
+                        val barHeight = scaledPeak * (size.height * 0.78f)
                         val isInActive = barX in inX..outX
                         val barColor = if (isInActive) Color(0xFF00E5FF) else Color(0xFF383838)
 

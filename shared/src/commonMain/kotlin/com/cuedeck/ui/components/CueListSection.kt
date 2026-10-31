@@ -33,6 +33,8 @@ fun CueListSection(
     onArmCue: (String) -> Unit,
     onEditCue: (Cue) -> Unit,
     onAddCueClick: () -> Unit,
+    onMoveUp: ((String) -> Unit)? = null,
+    onMoveDown: ((String) -> Unit)? = null,
     modifier: Modifier = Modifier
 ) {
     val listState = rememberLazyListState()
@@ -105,7 +107,9 @@ fun CueListSection(
                         isArmed = isArmed,
                         isPerformanceLocked = isPerformanceLocked,
                         onArm = { onArmCue(cue.id) },
-                        onEdit = { onEditCue(cue) }
+                        onEdit = { onEditCue(cue) },
+                        onMoveUp = onMoveUp?.let { { it(cue.id) } },
+                        onMoveDown = onMoveDown?.let { { it(cue.id) } }
                     )
                 }
             }
@@ -119,7 +123,9 @@ private fun CueRow(
     isArmed: Boolean,
     isPerformanceLocked: Boolean,
     onArm: () -> Unit,
-    onEdit: () -> Unit
+    onEdit: () -> Unit,
+    onMoveUp: (() -> Unit)? = null,
+    onMoveDown: (() -> Unit)? = null
 ) {
     val sec = cue.effectiveDurationMs / 1000
     val durationText = "%d:%02d".format(sec / 60, sec % 60)
@@ -138,7 +144,7 @@ private fun CueRow(
     ) {
         Row(
             verticalAlignment = Alignment.CenterVertically,
-            modifier = Modifier.padding(horizontal = 10.dp, vertical = 8.dp)
+            modifier = Modifier.padding(horizontal = 8.dp, vertical = 6.dp)
         ) {
             // Color tag bar
             Box(
@@ -149,22 +155,22 @@ private fun CueRow(
                     .background(Color(cue.colorHex))
             )
 
-            Spacer(modifier = Modifier.width(10.dp))
+            Spacer(modifier = Modifier.width(6.dp))
 
             // Cue Number
             Text(
                 text = cue.cueNumber,
-                fontSize = 15.sp,
+                fontSize = 14.sp,
                 fontWeight = FontWeight.Bold,
                 color = if (isArmed) ArmedBlue else Color.White,
-                modifier = Modifier.width(40.dp)
+                modifier = Modifier.width(36.dp)
             )
 
             // Cue Title
             Column(modifier = Modifier.weight(1f)) {
                 Text(
                     text = cue.name,
-                    fontSize = 14.sp,
+                    fontSize = 13.sp,
                     fontWeight = FontWeight.Medium,
                     color = Color.White,
                     maxLines = 1
@@ -172,7 +178,7 @@ private fun CueRow(
                 if (cue.notes.isNotBlank()) {
                     Text(
                         text = cue.notes,
-                        fontSize = 11.sp,
+                        fontSize = 10.sp,
                         color = Color.Gray,
                         maxLines = 1
                     )
@@ -182,9 +188,9 @@ private fun CueRow(
             // Duration
             Text(
                 text = durationText,
-                fontSize = 12.sp,
+                fontSize = 11.sp,
                 color = Color.LightGray,
-                modifier = Modifier.padding(horizontal = 6.dp)
+                modifier = Modifier.padding(horizontal = 4.dp)
             )
 
             // Follow Action Icon
@@ -200,20 +206,43 @@ private fun CueRow(
                     FollowAction.AUTO_FOLLOW -> Color(0xFF4CAF50)
                     FollowAction.AUTO_CONTINUE -> Color(0xFFFFB300)
                 },
-                modifier = Modifier.size(16.dp)
+                modifier = Modifier.size(15.dp)
             )
 
             if (!isPerformanceLocked) {
-                Spacer(modifier = Modifier.width(4.dp))
+                // Reorder buttons
+                IconButton(
+                    onClick = { onMoveUp?.invoke() },
+                    modifier = Modifier.size(24.dp)
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.KeyboardArrowUp,
+                        contentDescription = "Move Up",
+                        tint = Color.LightGray,
+                        modifier = Modifier.size(16.dp)
+                    )
+                }
+                IconButton(
+                    onClick = { onMoveDown?.invoke() },
+                    modifier = Modifier.size(24.dp)
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.KeyboardArrowDown,
+                        contentDescription = "Move Down",
+                        tint = Color.LightGray,
+                        modifier = Modifier.size(16.dp)
+                    )
+                }
+
                 IconButton(
                     onClick = onEdit,
-                    modifier = Modifier.size(32.dp)
+                    modifier = Modifier.size(26.dp)
                 ) {
                     Icon(
                         imageVector = Icons.Default.Settings,
                         contentDescription = "Edit Cue",
                         tint = Color.Gray,
-                        modifier = Modifier.size(16.dp)
+                        modifier = Modifier.size(15.dp)
                     )
                 }
             }

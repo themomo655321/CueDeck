@@ -2,12 +2,14 @@ package com.cuedeck.viewmodel
 
 import com.cuedeck.audio.AudioEngine
 import com.cuedeck.diagnostics.ErrorLogger
+import com.cuedeck.importer.PlatformWebAudioImporter
 import com.cuedeck.model.*
 import com.cuedeck.storage.SessionState
 import com.cuedeck.storage.ShowRepository
 import com.cuedeck.storage.StorageInspection
 import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.*
+import java.util.UUID
 
 class CueDeckViewModel(
     private val repository: ShowRepository,
@@ -390,6 +392,71 @@ class CueDeckViewModel(
             show.copy(cues = filtered, armedCueId = newArmed)
         }
         saveCurrentShow()
+    }
+
+    fun moveCueUp(cueId: String) {
+        _show.update { show ->
+            val index = show.cues.indexOfFirst { it.id == cueId }
+            if (index <= 0) return@update show
+            val list = show.cues.toMutableList()
+            val item = list.removeAt(index)
+            list.add(index - 1, item)
+            show.copy(cues = list)
+        }
+        saveCurrentShow()
+    }
+
+    fun moveCueDown(cueId: String) {
+        _show.update { show ->
+            val index = show.cues.indexOfFirst { it.id == cueId }
+            if (index < 0 || index >= show.cues.size - 1) return@update show
+            val list = show.cues.toMutableList()
+            val item = list.removeAt(index)
+            list.add(index + 1, item)
+            show.copy(cues = list)
+        }
+        saveCurrentShow()
+    }
+
+    fun importFromUrl(url: String) {
+        coroutineScope.launch {
+            try {
+                _importFileName.value = "Web Audio"
+                _importProgress.value = 0.05f
+
+                val targetDir = repository.getBasePath(_show.value.id)
+                val importer = PlatformWebAudioImporter()
+                val result = importer.downloadAudio(url, targetDir) { progress, status ->
+                    _importProgress.value = progress
+                    _importFileName.value = status
+                }
+
+                if (result != null) {
+                    val nextNum = (_show.value.cues.size + 1).toDouble()
+                    val newCue = Cue(
+                        id = UUID.randomUUID().toString(),
+                        cueNumber = "%.1f".format(nextNum),
+                        name = result.title,
+                        audioRelativePath = result.relativePath,
+                        originalFileName = result.fileName,
+                        durationMs = result.durationMs,
+                        volume = 1.0f,
+                        fadeInMs = 0L,
+                        fadeOutMs = 1000L
+                    )
+                    addCue(newCue)
+                    _saveFeedback.value = "Imported: ${result.title} ✓"
+                } else {
+                    showUserError("Failed to import audio from link. Please check the URL.")
+                }
+            } catch (e: Exception) {
+                ErrorLogger.error("CueDeckViewModel", "Error importing web audio", e)
+                showUserError("Import error: ${e.message}")
+            } finally {
+                _importProgress.value = null
+                _importFileName.value = null
+            }
+        }
     }
 
     fun assignCueToCartSlot(bankIndex: Int, slotIndex: Int, cueId: String?) {
