@@ -56,6 +56,7 @@ fun MainScreen(
     var showStorageModal by remember { mutableStateOf(false) }
     var showDiagnosticsModal by remember { mutableStateOf(false) }
     var showShowManagerModal by remember { mutableStateOf(false) }
+    var showLayoutManagerModal by remember { mutableStateOf(false) }
 
     val armedCue = show.findCue(show.armedCueId) ?: show.cues.firstOrNull()
 
@@ -67,6 +68,10 @@ fun MainScreen(
             .background(screenBg)
     ) {
         val isWideScreen = maxWidth > 650.dp // Tablet or landscape orientation
+        val activeLayout = viewModel.getActiveLayout(isWideScreen)
+        val density = androidx.compose.ui.platform.LocalDensity.current
+        val totalWidthPx = with(density) { maxWidth.toPx() }
+        val workspaceLayoutState by viewModel.workspaceLayoutState.collectAsState()
 
         Column(modifier = Modifier.fillMaxSize()) {
             // Persistent Top Safety Bar with Show Switcher, Lock & Settings
@@ -87,6 +92,7 @@ fun MainScreen(
                     viewModel.refreshSavedShows()
                     showShowManagerModal = true
                 },
+                onOpenLayoutManager = { showLayoutManagerModal = true },
                 onOpenSettings = { showSettingsModal = true }
             )
 
@@ -112,174 +118,324 @@ fun MainScreen(
             }
 
             if (isWideScreen) {
-                // Landscape Dual-Pane Layout (Tablet / Rotated Phone)
-                // Left: 4 Mixer Faders filling the entire left side vertically
-                // Right: Standby + Now Playing (at top of cue stack) + Cue Stack + GO Button
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .weight(1f)
-                        .padding(8.dp),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
-                    // Left Column: 4 Mixer Faders filling all left side vertically
-                    FaderBank(
-                        mixerSlots = mixerSlots,
-                        queueCount = mixerQueue.size,
-                        faderVolumes = faderVolumes,
-                        faderTailEnabled = faderTailEnabled,
-                        fineModeEnabled = settings.fineModeEnabled,
-                        onFineModeToggle = { viewModel.updateSettings(settings.copy(fineModeEnabled = it)) },
-                        onToggleFaderTail = { viewModel.toggleFaderTail(it) },
-                        onFaderChange = { ch, vol -> viewModel.setFaderVolume(ch, vol) },
-                        modifier = Modifier
-                            .weight(1.05f)
-                            .fillMaxHeight()
-                    )
+                // LANDSCAPE WORKSPACE LAYOUTS
+                when (activeLayout.layoutType) {
+                    LayoutType.CUE_MASTER_LEFT -> {
+                        // Reversed: Cue Stack on Left, Full-Height Mixer on Right
+                        val leftRatio = workspaceLayoutState.currentLandscapeRatio.coerceIn(0.20f, 0.80f)
+                        val rightRatio = 1f - leftRatio
 
-                    // Right Column: Armed Standby + Now Playing Drawer + Full Height Cue Stack + GO Button
-                    Column(
-                        verticalArrangement = Arrangement.spacedBy(6.dp),
-                        modifier = Modifier
-                            .weight(1.25f)
-                            .fillMaxHeight()
-                    ) {
-                        ArmedCueCard(
-                            armedCue = armedCue,
-                            onEditCue = { editingCue = it }
-                        )
-
-                        ActiveCuesDrawer(
-                            activePlaybacks = activePlaybacks,
-                            onStopCue = { id, fade -> viewModel.stopActivePlayback(id, fade) },
-                            modifier = Modifier.fillMaxWidth()
-                        )
-
-                        CueListSection(
-                            cues = show.cues,
-                            armedCueId = armedCue?.id,
-                            isPerformanceLocked = show.isPerformanceLocked,
-                            onArmCue = {
-                                onHapticFeedback()
-                                viewModel.armCue(it)
-                            },
-                            onEditCue = { editingCue = it },
-                            onAddCueClick = { showImportChoiceDialog = true },
-                            onMoveUp = { viewModel.moveCueUp(it) },
-                            onMoveDown = { viewModel.moveCueDown(it) },
-                            onMoveCue = { from, to -> viewModel.moveCue(from, to) },
-                            onDuplicateCue = {
-                                onHapticFeedback()
-                                viewModel.duplicateCue(it)
-                            },
+                        Row(
                             modifier = Modifier
+                                .fillMaxWidth()
                                 .weight(1f)
-                                .fillMaxWidth()
-                        )
+                                .padding(horizontal = 6.dp, vertical = 4.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Column(
+                                verticalArrangement = Arrangement.spacedBy(6.dp),
+                                modifier = Modifier
+                                    .weight(leftRatio)
+                                    .fillMaxHeight()
+                            ) {
+                                ArmedCueCard(armedCue = armedCue, onEditCue = { editingCue = it })
+                                ActiveCuesDrawer(activePlaybacks = activePlaybacks, onStopCue = { id, fade -> viewModel.stopActivePlayback(id, fade) }, modifier = Modifier.fillMaxWidth())
+                                CueListSection(
+                                    cues = show.cues,
+                                    armedCueId = armedCue?.id,
+                                    isPerformanceLocked = show.isPerformanceLocked,
+                                    onArmCue = { onHapticFeedback(); viewModel.armCue(it) },
+                                    onEditCue = { editingCue = it },
+                                    onAddCueClick = { showImportChoiceDialog = true },
+                                    onMoveUp = { viewModel.moveCueUp(it) },
+                                    onMoveDown = { viewModel.moveCueDown(it) },
+                                    onMoveCue = { from, to -> viewModel.moveCue(from, to) },
+                                    onDuplicateCue = { onHapticFeedback(); viewModel.duplicateCue(it) },
+                                    modifier = Modifier.weight(1f).fillMaxWidth()
+                                )
+                                GoButton(
+                                    armedCue = armedCue,
+                                    onGoClick = { onHapticFeedback(); viewModel.pressGo() },
+                                    modifier = Modifier.fillMaxWidth().height(64.dp)
+                                )
+                            }
 
-                        GoButton(
-                            armedCue = armedCue,
-                            onGoClick = {
-                                onHapticFeedback()
-                                viewModel.pressGo()
-                            },
+                            HorizontalResizeDivider(
+                                splitRatio = leftRatio,
+                                onRatioChange = { viewModel.updateHorizontalSplitRatio(isLandscape = true, it) },
+                                totalWidthPx = totalWidthPx
+                            )
+
+                            FaderBank(
+                                mixerSlots = mixerSlots,
+                                queueCount = mixerQueue.size,
+                                faderVolumes = faderVolumes,
+                                faderTailEnabled = faderTailEnabled,
+                                fineModeEnabled = settings.fineModeEnabled,
+                                onFineModeToggle = { viewModel.updateSettings(settings.copy(fineModeEnabled = it)) },
+                                onToggleFaderTail = { viewModel.toggleFaderTail(it) },
+                                onFaderChange = { ch, vol -> viewModel.setFaderVolume(ch, vol) },
+                                modifier = Modifier
+                                    .weight(rightRatio)
+                                    .fillMaxHeight()
+                            )
+                        }
+                    }
+                    LayoutType.BROADCAST_BOTTOM -> {
+                        // Broadcast Mode: Stack & Monitors on Top, Mixer across Bottom
+                        Column(
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .height(64.dp)
-                        )
+                                .weight(1f)
+                                .padding(horizontal = 6.dp, vertical = 4.dp)
+                        ) {
+                            Row(
+                                modifier = Modifier.fillMaxWidth().weight(1f),
+                                horizontalArrangement = Arrangement.spacedBy(6.dp)
+                            ) {
+                                Column(
+                                    modifier = Modifier.weight(0.9f).fillMaxHeight(),
+                                    verticalArrangement = Arrangement.spacedBy(6.dp)
+                                ) {
+                                    ArmedCueCard(armedCue = armedCue, onEditCue = { editingCue = it })
+                                    ActiveCuesDrawer(activePlaybacks = activePlaybacks, onStopCue = { id, fade -> viewModel.stopActivePlayback(id, fade) }, modifier = Modifier.weight(1f))
+                                }
+                                Box(modifier = Modifier.weight(1.1f).fillMaxHeight()) {
+                                    CueListSection(
+                                        cues = show.cues,
+                                        armedCueId = armedCue?.id,
+                                        isPerformanceLocked = show.isPerformanceLocked,
+                                        onArmCue = { onHapticFeedback(); viewModel.armCue(it) },
+                                        onEditCue = { editingCue = it },
+                                        onAddCueClick = { showImportChoiceDialog = true },
+                                        onMoveUp = { viewModel.moveCueUp(it) },
+                                        onMoveDown = { viewModel.moveCueDown(it) },
+                                        onMoveCue = { from, to -> viewModel.moveCue(from, to) },
+                                        onDuplicateCue = { onHapticFeedback(); viewModel.duplicateCue(it) },
+                                        modifier = Modifier.fillMaxSize()
+                                    )
+                                }
+                            }
+
+                            VerticalResizeDivider(
+                                onDragDelta = { dy ->
+                                    val newH = (workspaceLayoutState.currentFaderHeightDp - dy.toInt()).coerceIn(120, 350)
+                                    viewModel.updateFaderHeight(newH)
+                                }
+                            )
+
+                            FaderBank(
+                                mixerSlots = mixerSlots,
+                                queueCount = mixerQueue.size,
+                                faderVolumes = faderVolumes,
+                                faderTailEnabled = faderTailEnabled,
+                                fineModeEnabled = settings.fineModeEnabled,
+                                onFineModeToggle = { viewModel.updateSettings(settings.copy(fineModeEnabled = it)) },
+                                onToggleFaderTail = { viewModel.toggleFaderTail(it) },
+                                onFaderChange = { ch, vol -> viewModel.setFaderVolume(ch, vol) },
+                                modifier = Modifier.fillMaxWidth().height(workspaceLayoutState.currentFaderHeightDp.dp)
+                            )
+
+                            GoButton(
+                                armedCue = armedCue,
+                                onGoClick = { onHapticFeedback(); viewModel.pressGo() },
+                                modifier = Modifier.fillMaxWidth().padding(top = 4.dp).height(58.dp)
+                            )
+                        }
+                    }
+                    else -> {
+                        // Default Studio Console (CONSOLE_LEFT_MIXER): Full-Height Mixer on Left, Stack on Right
+                        val leftRatio = workspaceLayoutState.currentLandscapeRatio.coerceIn(0.20f, 0.80f)
+                        val rightRatio = 1f - leftRatio
+
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .weight(1f)
+                                .padding(horizontal = 6.dp, vertical = 4.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            FaderBank(
+                                mixerSlots = mixerSlots,
+                                queueCount = mixerQueue.size,
+                                faderVolumes = faderVolumes,
+                                faderTailEnabled = faderTailEnabled,
+                                fineModeEnabled = settings.fineModeEnabled,
+                                onFineModeToggle = { viewModel.updateSettings(settings.copy(fineModeEnabled = it)) },
+                                onToggleFaderTail = { viewModel.toggleFaderTail(it) },
+                                onFaderChange = { ch, vol -> viewModel.setFaderVolume(ch, vol) },
+                                modifier = Modifier
+                                    .weight(leftRatio)
+                                    .fillMaxHeight()
+                            )
+
+                            HorizontalResizeDivider(
+                                splitRatio = leftRatio,
+                                onRatioChange = { viewModel.updateHorizontalSplitRatio(isLandscape = true, it) },
+                                totalWidthPx = totalWidthPx
+                            )
+
+                            Column(
+                                verticalArrangement = Arrangement.spacedBy(6.dp),
+                                modifier = Modifier
+                                    .weight(rightRatio)
+                                    .fillMaxHeight()
+                            ) {
+                                ArmedCueCard(armedCue = armedCue, onEditCue = { editingCue = it })
+                                ActiveCuesDrawer(activePlaybacks = activePlaybacks, onStopCue = { id, fade -> viewModel.stopActivePlayback(id, fade) }, modifier = Modifier.fillMaxWidth())
+                                CueListSection(
+                                    cues = show.cues,
+                                    armedCueId = armedCue?.id,
+                                    isPerformanceLocked = show.isPerformanceLocked,
+                                    onArmCue = { onHapticFeedback(); viewModel.armCue(it) },
+                                    onEditCue = { editingCue = it },
+                                    onAddCueClick = { showImportChoiceDialog = true },
+                                    onMoveUp = { viewModel.moveCueUp(it) },
+                                    onMoveDown = { viewModel.moveCueDown(it) },
+                                    onMoveCue = { from, to -> viewModel.moveCue(from, to) },
+                                    onDuplicateCue = { onHapticFeedback(); viewModel.duplicateCue(it) },
+                                    modifier = Modifier.weight(1f).fillMaxWidth()
+                                )
+                                GoButton(
+                                    armedCue = armedCue,
+                                    onGoClick = { onHapticFeedback(); viewModel.pressGo() },
+                                    modifier = Modifier.fillMaxWidth().height(64.dp)
+                                )
+                            }
+                        }
                     }
                 }
             } else {
-                // Mobile Portrait Split-Screen Layout (Phone)
-                // Left: Now Playing & Standby; Right: Full-Height Cue Stack; Bottom: Faders + Full-Width GO
-                Column(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .padding(horizontal = 6.dp, vertical = 4.dp),
-                    verticalArrangement = Arrangement.SpaceBetween
-                ) {
-                    // Middle Split Screen: Left (Now Playing & Standby) vs Right (Cue Stack)
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .weight(1f),
-                        horizontalArrangement = Arrangement.spacedBy(6.dp)
-                    ) {
-                        // Left Column: Armed Standby Card + Now Playing Active Drawer
+                // PORTRAIT WORKSPACE LAYOUTS
+                when (activeLayout.layoutType) {
+                    LayoutType.SPLIT_MOBILE -> {
+                        // Split Screen Mobile: Controls on Left, Stack on Right, Faders Bottom
+                        val leftRatio = workspaceLayoutState.currentPortraitRatio.coerceIn(0.25f, 0.75f)
+                        val rightRatio = 1f - leftRatio
+
                         Column(
                             modifier = Modifier
-                                .weight(0.95f)
-                                .fillMaxHeight(),
-                            verticalArrangement = Arrangement.spacedBy(6.dp)
+                                .fillMaxSize()
+                                .padding(horizontal = 6.dp, vertical = 4.dp),
+                            verticalArrangement = Arrangement.SpaceBetween
                         ) {
-                            ArmedCueCard(
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .weight(1f),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Column(
+                                    modifier = Modifier.weight(leftRatio).fillMaxHeight(),
+                                    verticalArrangement = Arrangement.spacedBy(6.dp)
+                                ) {
+                                    ArmedCueCard(armedCue = armedCue, onEditCue = { editingCue = it })
+                                    ActiveCuesDrawer(activePlaybacks = activePlaybacks, onStopCue = { id, fade -> viewModel.stopActivePlayback(id, fade) }, modifier = Modifier.weight(1f))
+                                }
+
+                                HorizontalResizeDivider(
+                                    splitRatio = leftRatio,
+                                    onRatioChange = { viewModel.updateHorizontalSplitRatio(isLandscape = false, it) },
+                                    totalWidthPx = totalWidthPx
+                                )
+
+                                Box(modifier = Modifier.weight(rightRatio).fillMaxHeight()) {
+                                    CueListSection(
+                                        cues = show.cues,
+                                        armedCueId = armedCue?.id,
+                                        isPerformanceLocked = show.isPerformanceLocked,
+                                        onArmCue = { onHapticFeedback(); viewModel.armCue(it) },
+                                        onEditCue = { editingCue = it },
+                                        onAddCueClick = { showImportChoiceDialog = true },
+                                        onMoveUp = { viewModel.moveCueUp(it) },
+                                        onMoveDown = { viewModel.moveCueDown(it) },
+                                        onMoveCue = { from, to -> viewModel.moveCue(from, to) },
+                                        onDuplicateCue = { onHapticFeedback(); viewModel.duplicateCue(it) },
+                                        modifier = Modifier.fillMaxSize()
+                                    )
+                                }
+                            }
+
+                            VerticalResizeDivider(
+                                onDragDelta = { dy ->
+                                    val newH = (workspaceLayoutState.currentFaderHeightDp - dy.toInt()).coerceIn(120, 320)
+                                    viewModel.updateFaderHeight(newH)
+                                }
+                            )
+
+                            FaderBank(
+                                mixerSlots = mixerSlots,
+                                queueCount = mixerQueue.size,
+                                faderVolumes = faderVolumes,
+                                faderTailEnabled = faderTailEnabled,
+                                fineModeEnabled = settings.fineModeEnabled,
+                                onFineModeToggle = { viewModel.updateSettings(settings.copy(fineModeEnabled = it)) },
+                                onToggleFaderTail = { viewModel.toggleFaderTail(it) },
+                                onFaderChange = { ch, vol -> viewModel.setFaderVolume(ch, vol) },
+                                modifier = Modifier.fillMaxWidth().height(workspaceLayoutState.currentFaderHeightDp.dp)
+                            )
+
+                            GoButton(
                                 armedCue = armedCue,
-                                onEditCue = { editingCue = it }
-                            )
-
-                            ActiveCuesDrawer(
-                                activePlaybacks = activePlaybacks,
-                                onStopCue = { id, fade -> viewModel.stopActivePlayback(id, fade) },
-                                modifier = Modifier.weight(1f)
-                            )
-                        }
-
-                        // Right Column: Dedicated Full Height Cue Stack
-                        Box(
-                            modifier = Modifier
-                                .weight(1.05f)
-                                .fillMaxHeight()
-                        ) {
-                            CueListSection(
-                                cues = show.cues,
-                                armedCueId = armedCue?.id,
-                                isPerformanceLocked = show.isPerformanceLocked,
-                                onArmCue = {
-                                    onHapticFeedback()
-                                    viewModel.armCue(it)
-                                },
-                                onEditCue = { editingCue = it },
-                                onAddCueClick = { showImportChoiceDialog = true },
-                                onMoveUp = { viewModel.moveCueUp(it) },
-                                onMoveDown = { viewModel.moveCueDown(it) },
-                                onMoveCue = { from, to -> viewModel.moveCue(from, to) },
-                                onDuplicateCue = {
-                                    onHapticFeedback()
-                                    viewModel.duplicateCue(it)
-                                },
-                                modifier = Modifier.fillMaxSize()
+                                onGoClick = { onHapticFeedback(); viewModel.pressGo() },
+                                modifier = Modifier.fillMaxWidth().padding(top = 4.dp).height(64.dp)
                             )
                         }
                     }
+                    else -> {
+                        // Default Classic Theatre (CLASSIC_THEATRE): Armed/Now Playing Top, Stack Mid, Faders Bottom, GO Bottom
+                        Column(
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .padding(horizontal = 6.dp, vertical = 4.dp)
+                        ) {
+                            ArmedCueCard(armedCue = armedCue, onEditCue = { editingCue = it })
+                            Spacer(modifier = Modifier.height(4.dp))
+                            ActiveCuesDrawer(activePlaybacks = activePlaybacks, onStopCue = { id, fade -> viewModel.stopActivePlayback(id, fade) }, modifier = Modifier.fillMaxWidth())
+                            Spacer(modifier = Modifier.height(4.dp))
 
-                    Spacer(modifier = Modifier.height(4.dp))
+                            Box(modifier = Modifier.weight(1f).fillMaxWidth()) {
+                                CueListSection(
+                                    cues = show.cues,
+                                    armedCueId = armedCue?.id,
+                                    isPerformanceLocked = show.isPerformanceLocked,
+                                    onArmCue = { onHapticFeedback(); viewModel.armCue(it) },
+                                    onEditCue = { editingCue = it },
+                                    onAddCueClick = { showImportChoiceDialog = true },
+                                    onMoveUp = { viewModel.moveCueUp(it) },
+                                    onMoveDown = { viewModel.moveCueDown(it) },
+                                    onMoveCue = { from, to -> viewModel.moveCue(from, to) },
+                                    onDuplicateCue = { onHapticFeedback(); viewModel.duplicateCue(it) },
+                                    modifier = Modifier.fillMaxSize()
+                                )
+                            }
 
-                    // 4 Channel Mixer Faders
-                    FaderBank(
-                        mixerSlots = mixerSlots,
-                        queueCount = mixerQueue.size,
-                        faderVolumes = faderVolumes,
-                        faderTailEnabled = faderTailEnabled,
-                        fineModeEnabled = settings.fineModeEnabled,
-                        onFineModeToggle = { viewModel.updateSettings(settings.copy(fineModeEnabled = it)) },
-                        onToggleFaderTail = { viewModel.toggleFaderTail(it) },
-                        onFaderChange = { ch, vol -> viewModel.setFaderVolume(ch, vol) },
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .height(185.dp)
-                    )
+                            VerticalResizeDivider(
+                                onDragDelta = { dy ->
+                                    val newH = (workspaceLayoutState.currentFaderHeightDp - dy.toInt()).coerceIn(120, 320)
+                                    viewModel.updateFaderHeight(newH)
+                                }
+                            )
 
-                    // Persistent Full-Width Giant GO Button at bottom
-                    GoButton(
-                        armedCue = armedCue,
-                        onGoClick = {
-                            onHapticFeedback()
-                            viewModel.pressGo()
-                        },
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(top = 4.dp)
-                    )
+                            FaderBank(
+                                mixerSlots = mixerSlots,
+                                queueCount = mixerQueue.size,
+                                faderVolumes = faderVolumes,
+                                faderTailEnabled = faderTailEnabled,
+                                fineModeEnabled = settings.fineModeEnabled,
+                                onFineModeToggle = { viewModel.updateSettings(settings.copy(fineModeEnabled = it)) },
+                                onToggleFaderTail = { viewModel.toggleFaderTail(it) },
+                                onFaderChange = { ch, vol -> viewModel.setFaderVolume(ch, vol) },
+                                modifier = Modifier.fillMaxWidth().height(workspaceLayoutState.currentFaderHeightDp.dp)
+                            )
+
+                            GoButton(
+                                armedCue = armedCue,
+                                onGoClick = { onHapticFeedback(); viewModel.pressGo() },
+                                modifier = Modifier.fillMaxWidth().padding(top = 4.dp).height(64.dp)
+                            )
+                        }
+                    }
                 }
             }
         }
@@ -477,6 +633,15 @@ fun MainScreen(
             onImportLocalFile = onImportAudioRequest,
             onImportUrl = { viewModel.importFromUrl(it) },
             onDismiss = { showImportChoiceDialog = false }
+        )
+    }
+
+    // Modal: Workspace Layout Manager
+    if (showLayoutManagerModal) {
+        LayoutManagerModal(
+            viewModel = viewModel,
+            isLandscapeCurrent = isWideScreen,
+            onDismiss = { showLayoutManagerModal = false }
         )
     }
 

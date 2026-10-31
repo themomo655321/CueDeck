@@ -13,6 +13,7 @@ actual class PlatformStorage {
 
     private val lastShowFile = File(rootDir, "last_active_show.txt")
     private val sessionFile = File(rootDir, "session_state.json")
+    private val layoutFile = File(rootDir, "workspace_layouts.json")
 
     actual fun getShowDirectory(showId: String): String {
         val dir = File(rootDir, showId)
@@ -120,6 +121,20 @@ actual class PlatformStorage {
     actual fun loadSessionState(): String? {
         return try {
             if (sessionFile.exists()) sessionFile.readText() else null
+        } catch (e: Exception) {
+            null
+        }
+    }
+
+    actual fun saveLayoutState(layoutJson: String) {
+        try {
+            layoutFile.writeText(layoutJson)
+        } catch (ignored: Exception) {}
+    }
+
+    actual fun loadLayoutState(): String? {
+        return try {
+            if (layoutFile.exists()) layoutFile.readText() else null
         } catch (e: Exception) {
             null
         }

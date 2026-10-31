@@ -40,37 +40,44 @@ jobs:
       - name: Prepare APK Asset
         run: |
           mkdir -p release_assets
-          cp androidApp/build/outputs/apk/debug/androidApp-debug.apk release_assets/CueDeck-v1.1.1-debug.apk
+          cp androidApp/build/outputs/apk/debug/androidApp-debug.apk release_assets/CueDeck-v1.1.2-debug.apk
 
       - name: Upload APK as Workflow Artifact
         uses: actions/upload-artifact@v4
         with:
           name: CueDeck-debug-apk
-          path: release_assets/CueDeck-v1.1.1-debug.apk
+          path: release_assets/CueDeck-v1.1.2-debug.apk
           retention-days: 14
 
       - name: Create or Update GitHub Release
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: v1.1.1
-          name: "CueDeck v1.1.1 Preview APK"
+          tag_name: v1.1.2
+          name: "CueDeck v1.1.2 Preview APK"
           make_latest: true
           body: |
-            ### 🎛️ CueDeck v1.1.1 - Live Cue Trigger & Show Control
+            ### 🎛️ CueDeck v1.1.2 - Live Cue Trigger & Show Control
             Direct Android APK build for mobile & tablet testing (compatible with Android 11+ and ADVAN Sketsa 2).
 
-            #### 🛠️ What's New in v1.1.1:
-            - **Landscape Mode Layout Overhaul**:
-              - **Full-Height 4-Channel Mixer on Left Side**: The 4-channel Live Mixer now fills the entire left column vertically from top to bottom, turning the tablet/landscape screen into a true full-scale mixing console with tall, physical-feeling fader grooves.
-              - **Now Playing at Top of Cue Stack**: Moved the Now Playing active track drawer to the top of the cue stack on the right pane (just below the Armed / Standby card), perfectly mirroring portrait mode.
-              - **Dynamic Vertical Space Allocation**: Now Playing only occupies height when tracks are actively playing (with scrollable multi-track support up to 160dp max), collapsing completely when idle to give the Cue Stack maximum vertical space.
-              - **Dynamic Fader Virtual Travel**: Virtual drag tracking canvas scales dynamically with the physical fader height (at least 1:1 or 4× in FINE mode) so full-height faders glide smoothly without twitching or hypersensitivity.
-            - **Retained from v1.1.0 & v1.0.9**:
-              - Virtual Infinite Canvas + Floating Value HUD (% and dB).
-              - Double-tap fader to snap to unity gain (100% / 0.0 dB).
-              - Per-channel Reverb / Echo Fade-out Tail (`[✦ TAIL]`) with 1.8s smooth acoustic decay.
-              - Hardware volume rocker cue stack selection with circular wrap-around.
-              - Tap Armed / Standby card to jump into Cue Edit.
-          files: release_assets/CueDeck-v1.1.1-debug.apk
+            #### 🛠️ What's New in v1.1.2:
+            - **Option A: Elastic Throttle Chasing Faders (FINE Mode)**:
+              - When `FINE` mode is active, touching or holding anywhere on the fader track sets the target volume, and the fader smoothly glides towards your held finger at the gear-ratio speed.
+              - **Elastic Speed**: Micro-crawls at ~5%/sec (0.05 dB increments) when your finger is close, and accelerates up to ~28%/sec when held far ahead.
+              - Neon cyan target indicator dot shows where the fader is pursuing. Releasing locks volume immediately.
+              - Double-tap instantly snaps to unity gain (100% / 0.0 dB).
+            - **Resizable Workspace with Tactile Splitters**:
+              - **Horizontal Splitter**: Draggable 3-dot grip bar between columns to smoothly allocate screen width (20% to 80%).
+              - **Vertical Splitter**: Draggable bar to resize mixer fader height on the fly (120dp to 350dp).
+              - All panels and faders flex dynamically to fit the allocated area.
+            - **Stage Workspace Layout Manager (`[ ⊞ ]` in Top Bar)**:
+              - Select factory presets and save/load custom layouts.
+              - **Protected Default Layouts**: Factory defaults are marked `🔒 READ-ONLY` and cannot be overwritten or deleted!
+              - **Full Dual-Orientation Profiles**: Landscape and Portrait orientations independently remember their own layout and split ratios.
+              - **Factory Presets Included**:
+                - Landscape: *Studio Console* (Default), *Cue Master* (Reversed), *Broadcast Deck* (Mixer Bottom).
+                - Portrait: *Classic Theatre* (Default), *Split Screen Mobile*.
+              - **Save Layout As...**: Save custom splitters and panel arrangements under custom show names.
+              - **Reset to Default**: 1-tap restore to factory defaults at any time.
+          files: release_assets/CueDeck-v1.1.2-debug.apk
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

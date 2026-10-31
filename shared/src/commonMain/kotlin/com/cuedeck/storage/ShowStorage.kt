@@ -1,6 +1,7 @@
 package com.cuedeck.storage
 
 import com.cuedeck.model.Show
+import com.cuedeck.model.WorkspaceLayoutState
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
@@ -57,6 +58,8 @@ expect class PlatformStorage {
     fun getAudioFiles(showId: String): List<Pair<String, Long>>
     fun saveSessionState(sessionJson: String)
     fun loadSessionState(): String?
+    fun saveLayoutState(layoutJson: String)
+    fun loadLayoutState(): String?
     fun openFolderInSystem(showId: String)
 }
 
@@ -154,6 +157,24 @@ class ShowRepository(private val platformStorage: PlatformStorage) {
         val str = platformStorage.loadSessionState() ?: return null
         return try {
             json.decodeFromString<SessionState>(str)
+        } catch (e: Exception) {
+            null
+        }
+    }
+
+    fun saveWorkspaceLayoutState(state: WorkspaceLayoutState) {
+        try {
+            val str = json.encodeToString(state)
+            platformStorage.saveLayoutState(str)
+        } catch (e: Exception) {
+            e.printStackTrace()
+        }
+    }
+
+    fun loadWorkspaceLayoutState(): WorkspaceLayoutState? {
+        val str = platformStorage.loadLayoutState() ?: return null
+        return try {
+            json.decodeFromString<WorkspaceLayoutState>(str)
         } catch (e: Exception) {
             null
         }

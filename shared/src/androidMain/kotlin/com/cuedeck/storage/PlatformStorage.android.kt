@@ -45,6 +45,11 @@ actual class PlatformStorage(private val context: Context) {
         File(ext ?: context.filesDir, "last_active_show.txt")
     }
 
+    private val layoutFile by lazy {
+        val ext = context.getExternalFilesDir(null)
+        File(ext ?: context.filesDir, "workspace_layouts.json")
+    }
+
     actual fun getShowDirectory(showId: String): String {
         val dir = File(rootDir, showId)
         if (!dir.exists()) dir.mkdirs()
@@ -190,6 +195,23 @@ actual class PlatformStorage(private val context: Context) {
     actual fun loadSessionState(): String? {
         return try {
             if (sessionFile.exists()) sessionFile.readText() else null
+        } catch (e: Exception) {
+            null
+        }
+    }
+
+    actual fun saveLayoutState(layoutJson: String) {
+        try {
+            layoutFile.parentFile?.mkdirs()
+            layoutFile.writeText(layoutJson)
+        } catch (e: Exception) {
+            ErrorLogger.warn("PlatformStorage", "Failed to save layout state", e)
+        }
+    }
+
+    actual fun loadLayoutState(): String? {
+        return try {
+            if (layoutFile.exists()) layoutFile.readText() else null
         } catch (e: Exception) {
             null
         }

@@ -35,6 +35,7 @@ import com.cuedeck.ui.theme.PanicRed
 import kotlin.math.abs
 import kotlin.math.log10
 import kotlin.math.roundToInt
+import kotlin.math.sign
 
 /**
  * 4-Channel Live Audio Fader Console with Triple Fine-Tuning:
@@ -359,9 +360,37 @@ private fun TactileVerticalFader(
 
     var currentDisplayVol by remember { mutableFloatStateOf(volume) }
     var isDragging by remember { mutableStateOf(false) }
+    var targetVol by remember { mutableStateOf<Float?>(null) }
+    var isHolding by remember { mutableStateOf(false) }
 
     LaunchedEffect(volume) {
         currentDisplayVol = volume
+    }
+
+    // Option A: Elastic Throttle Chasing Fader Loop in FINE mode
+    LaunchedEffect(isHolding, isFineMode, targetVol) {
+        if (!isHolding || !isFineMode) return@LaunchedEffect
+        var lastTimeNanos = withFrameNanos { it }
+        while (isHolding && isFineMode) {
+            val nowNanos = withFrameNanos { it }
+            val dt = ((nowNanos - lastTimeNanos) / 1_000_000_000f).coerceIn(0.001f, 0.05f)
+            lastTimeNanos = nowNanos
+
+            val currentTarget = targetVol ?: break
+            val diff = currentTarget - currentDisplayVol
+            if (abs(diff) > 0.002f) {
+                // Elastic Throttle Speed:
+                // Close to target (<= 0.10f diff): ~0.05f/sec (0.05dB micro steps)
+                // Far from target (>= 0.70f diff): up to ~0.28f/sec (swift transition)
+                val normalizedDist = (abs(diff) / 1.25f).coerceIn(0f, 1f)
+                val speed = 0.05f + (normalizedDist * 0.23f)
+                val step = (speed * dt).coerceAtMost(abs(diff))
+
+                val newVol = (currentDisplayVol + sign(diff) * step).coerceIn(0f, 1.25f)
+                currentDisplayVol = newVol
+                onVolumeChange((newVol * 1000).roundToInt() / 1000f)
+            }
+        }
     }
 
     BoxWithConstraints(
@@ -410,8 +439,16 @@ private fun TactileVerticalFader(
                             return@awaitEachGesture
                         }
 
-                        // Start continuous tracking across infinite virtual canvas
+                        // Start continuous tracking / pursuit
                         isDragging = true
+                        isHolding = true
+
+                        val travelHeightPx = travelHeight.toPx()
+                        if (isFineMode) {
+                            val touchY = (down.position.y - faderCapHeightPx / 2f).coerceIn(0f, travelHeightPx)
+                            targetVol = ((1f - (touchY / travelHeightPx)) * 1.25f).coerceIn(0f, 1.25f)
+                        }
+
                         var lastY = down.position.y
 
                         while (true) {
@@ -419,29 +456,37 @@ private fun TactileVerticalFader(
                             val pointer = event.changes.firstOrNull { it.id == down.id } ?: break
                             if (!pointer.pressed) {
                                 isDragging = false
+                                isHolding = false
+                                targetVol = null
                                 break
                             }
                             pointer.consume()
 
-                            val currentY = pointer.position.y
-                            val deltaY = currentY - lastY
-                            lastY = currentY
+                            if (isFineMode) {
+                                // Finger position dynamically steers pursuit target
+                                val touchY = (pointer.position.y - faderCapHeightPx / 2f).coerceIn(0f, travelHeightPx)
+                                targetVol = ((1f - (touchY / travelHeightPx)) * 1.25f).coerceIn(0f, 1.25f)
+                            } else {
+                                val currentY = pointer.position.y
+                                val deltaY = currentY - lastY
+                                lastY = currentY
 
-                            // Natural logarithmic audio taper sensitivity:
-                            // Near unity gain (0.7f..1.25f), sensitivity is refined for 0.1dB micro-balance.
-                            // Below 0.2f, smooth taper down to zero.
-                            val audioTaperFactor = when {
-                                clampedVol > 0.7f -> 0.85f
-                                clampedVol < 0.2f -> 1.15f
-                                else -> 1.0f
+                                // Natural logarithmic audio taper sensitivity:
+                                val audioTaperFactor = when {
+                                    clampedVol > 0.7f -> 0.85f
+                                    clampedVol < 0.2f -> 1.15f
+                                    else -> 1.0f
+                                }
+
+                                // Upward drag (negative deltaY) increases volume, downward decreases
+                                val deltaVol = -(deltaY / virtualTravelPx) * 1.25f * audioTaperFactor
+                                currentDisplayVol = (currentDisplayVol + deltaVol).coerceIn(0f, 1.25f)
+                                onVolumeChange((currentDisplayVol * 1000).roundToInt() / 1000f)
                             }
-
-                            // Upward drag (negative deltaY) increases volume, downward decreases
-                            val deltaVol = -(deltaY / virtualTravelPx) * 1.25f * audioTaperFactor
-                            currentDisplayVol = (currentDisplayVol + deltaVol).coerceIn(0f, 1.25f)
-                            onVolumeChange((currentDisplayVol * 1000).roundToInt() / 1000f)
                         }
                         isDragging = false
+                        isHolding = false
+                        targetVol = null
                     }
                 }
         ) {
@@ -467,6 +512,21 @@ private fun TactileVerticalFader(
                     .clip(RoundedCornerShape(1.5.dp))
                     .background(if (abs(clampedVol - 1.0f) < 0.02f) Color(0xFF00E676) else Color(0xFF666666))
             )
+
+            // Target pursuit indicator dot when in FINE mode
+            if (isFineMode && isHolding && targetVol != null) {
+                val targetNorm = (targetVol!! / 1.25f).coerceIn(0f, 1f)
+                val targetYOffset = travelHeight * (1f - targetNorm) + (faderCapHeight / 2) - 4.dp
+                Box(
+                    modifier = Modifier
+                        .offset(y = targetYOffset)
+                        .align(Alignment.TopCenter)
+                        .size(8.dp)
+                        .clip(CircleShape)
+                        .background(Color(0xFF00E5FF))
+                        .border(1.dp, Color.White, CircleShape)
+                )
+            }
 
             // Option 1: Floating Value HUD Bubble (Floats above finger, never blocked by thumb)
             AnimatedVisibility(

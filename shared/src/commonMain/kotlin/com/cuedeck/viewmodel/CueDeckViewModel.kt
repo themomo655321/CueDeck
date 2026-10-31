@@ -69,10 +69,14 @@ class CueDeckViewModel(
     private val _userErrorMessage = MutableStateFlow<String?>(null)
     val userErrorMessage: StateFlow<String?> = _userErrorMessage.asStateFlow()
 
+    private val _workspaceLayoutState = MutableStateFlow(WorkspaceLayoutState())
+    val workspaceLayoutState: StateFlow<WorkspaceLayoutState> = _workspaceLayoutState.asStateFlow()
+
     init {
         loadInitialShow()
         restoreSessionState()
         refreshSavedShows()
+        loadWorkspaceLayouts()
 
         // Auto-follow event listener
         coroutineScope.launch {
@@ -723,5 +727,148 @@ class CueDeckViewModel(
             delay(4000)
             _userErrorMessage.value = null
         }
+    }
+
+    fun loadWorkspaceLayouts() {
+        val saved = repository.loadWorkspaceLayoutState()
+        if (saved != null) {
+            _workspaceLayoutState.value = saved
+        }
+    }
+
+    private fun persistWorkspaceLayouts() {
+        repository.saveWorkspaceLayoutState(_workspaceLayoutState.value)
+    }
+
+    fun selectLayout(layout: WorkspaceLayout) {
+        _workspaceLayoutState.update { current ->
+            if (layout.isLandscape) {
+                current.copy(
+                    activeLandscapeId = layout.id,
+                    currentLandscapeRatio = layout.horizontalSplitRatio,
+                    currentFaderHeightDp = layout.faderHeightDp
+                )
+            } else {
+                current.copy(
+                    activePortraitId = layout.id,
+                    currentPortraitRatio = layout.horizontalSplitRatio,
+                    currentFaderHeightDp = layout.faderHeightDp
+                )
+            }
+        }
+        persistWorkspaceLayouts()
+    }
+
+    fun updateHorizontalSplitRatio(isLandscape: Boolean, ratio: Float) {
+        _workspaceLayoutState.update { current ->
+            if (isLandscape) {
+                current.copy(currentLandscapeRatio = ratio)
+            } else {
+                current.copy(currentPortraitRatio = ratio)
+            }
+        }
+        persistWorkspaceLayouts()
+    }
+
+    fun updateFaderHeight(heightDp: Int) {
+        _workspaceLayoutState.update { it.copy(currentFaderHeightDp = heightDp.coerceIn(120, 450)) }
+        persistWorkspaceLayouts()
+    }
+
+    fun saveCurrentLayoutAs(name: String, isLandscape: Boolean) {
+        if (name.isBlank()) return
+        val current = _workspaceLayoutState.value
+        val activeLayout = getActiveLayout(isLandscape)
+
+        val newId = "custom_" + UUID.randomUUID().toString().take(8)
+        val newLayout = WorkspaceLayout(
+            id = newId,
+            name = name.trim(),
+            isDefault = false,
+            isLandscape = isLandscape,
+            layoutType = activeLayout.layoutType,
+            horizontalSplitRatio = if (isLandscape) current.currentLandscapeRatio else current.currentPortraitRatio,
+            faderHeightDp = current.currentFaderHeightDp
+        )
+
+        _workspaceLayoutState.update { state ->
+            val updatedList = state.customLayouts.filter { it.id != newId } + newLayout
+            if (isLandscape) {
+                state.copy(
+                    activeLandscapeId = newId,
+                    customLayouts = updatedList
+                )
+            } else {
+                state.copy(
+                    activePortraitId = newId,
+                    customLayouts = updatedList
+                )
+            }
+        }
+        persistWorkspaceLayouts()
+    }
+
+    fun updateCustomLayout(layout: WorkspaceLayout) {
+        if (layout.isDefault) return // Safeguard: never overwrite default layouts
+        val current = _workspaceLayoutState.value
+        val updatedLayout = layout.copy(
+            horizontalSplitRatio = if (layout.isLandscape) current.currentLandscapeRatio else current.currentPortraitRatio,
+            faderHeightDp = current.currentFaderHeightDp
+        )
+        _workspaceLayoutState.update { state ->
+            state.copy(customLayouts = state.customLayouts.map { if (it.id == layout.id) updatedLayout else it })
+        }
+        persistWorkspaceLayouts()
+    }
+
+    fun deleteCustomLayout(layoutId: String) {
+        val current = _workspaceLayoutState.value
+        val target = current.customLayouts.find { it.id == layoutId } ?: return
+        if (target.isDefault) return // Safeguard
+
+        _workspaceLayoutState.update { state ->
+            val remaining = state.customLayouts.filter { it.id != layoutId }
+            var newLandId = state.activeLandscapeId
+            var newPortId = state.activePortraitId
+            if (newLandId == layoutId) {
+                newLandId = DEFAULT_LANDSCAPE_LAYOUTS.first().id
+            }
+            if (newPortId == layoutId) {
+                newPortId = DEFAULT_PORTRAIT_LAYOUTS.first().id
+            }
+            state.copy(
+                customLayouts = remaining,
+                activeLandscapeId = newLandId,
+                activePortraitId = newPortId
+            )
+        }
+        persistWorkspaceLayouts()
+    }
+
+    fun resetToDefaultLayout(isLandscape: Boolean) {
+        val defaultLayout = if (isLandscape) DEFAULT_LANDSCAPE_LAYOUTS.first() else DEFAULT_PORTRAIT_LAYOUTS.first()
+        _workspaceLayoutState.update { state ->
+            if (isLandscape) {
+                state.copy(
+                    activeLandscapeId = defaultLayout.id,
+                    currentLandscapeRatio = defaultLayout.horizontalSplitRatio,
+                    currentFaderHeightDp = defaultLayout.faderHeightDp
+                )
+            } else {
+                state.copy(
+                    activePortraitId = defaultLayout.id,
+                    currentPortraitRatio = defaultLayout.horizontalSplitRatio,
+                    currentFaderHeightDp = defaultLayout.faderHeightDp
+                )
+            }
+        }
+        persistWorkspaceLayouts()
+    }
+
+    fun getActiveLayout(isLandscape: Boolean): WorkspaceLayout {
+        val state = _workspaceLayoutState.value
+        val activeId = if (isLandscape) state.activeLandscapeId else state.activePortraitId
+        val allLayouts = (if (isLandscape) DEFAULT_LANDSCAPE_LAYOUTS else DEFAULT_PORTRAIT_LAYOUTS) + state.customLayouts.filter { it.isLandscape == isLandscape }
+        return allLayouts.find { it.id == activeId } ?: (if (isLandscape) DEFAULT_LANDSCAPE_LAYOUTS.first() else DEFAULT_PORTRAIT_LAYOUTS.first())
     }
 }

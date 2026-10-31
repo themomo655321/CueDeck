@@ -35,6 +35,7 @@ fun TopSafetyBar(
     onPanicStop: () -> Unit,
     onSaveShow: () -> Unit = {},
     onOpenShowManager: () -> Unit = {},
+    onOpenLayoutManager: () -> Unit = {},
     onOpenSettings: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
@@ -106,8 +107,20 @@ fun TopSafetyBar(
                     }
                 }
 
-                // Quick Controls: Settings, Volume & Panic Stop
+                // Quick Controls: Layout, Settings, Volume & Panic Stop
                 Row(verticalAlignment = Alignment.CenterVertically) {
+                    // Workspace Layout Manager Button
+                    IconButton(
+                        onClick = onOpenLayoutManager,
+                        modifier = Modifier.size(38.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Dashboard,
+                            contentDescription = "Workspace Layout Manager",
+                            tint = Color(0xFF00E5FF)
+                        )
+                    }
+
                     // Settings Button
                     IconButton(
                         onClick = onOpenSettings,
