@@ -97,6 +97,7 @@ fun WaveformTrimView(
                 .clip(RoundedCornerShape(6.dp))
                 .background(Color(0xFF0D0D0D))
         ) {
+            val parentMaxWidth = maxWidth
             val widthPx = constraints.maxWidth.toFloat()
             val heightPx = constraints.maxHeight.toFloat()
 
@@ -204,9 +205,10 @@ fun WaveformTrimView(
 
                 // IN Handle Flag
                 val inFraction = (inPointSec / duration).coerceIn(0f, 1f)
+                val inOffsetDp = ((parentMaxWidth - 28.dp) * inFraction).let { if (it < 0.dp) 0.dp else it }
                 Box(
                     modifier = Modifier
-                        .offset(x = (inFraction * (maxWidth - 28.dp)).coerceAtLeast(0.dp))
+                        .offset(x = inOffsetDp)
                         .align(Alignment.TopStart)
                         .clip(RoundedCornerShape(bottomEnd = 4.dp))
                         .background(Color(0xFF00E676))
@@ -217,9 +219,10 @@ fun WaveformTrimView(
 
                 // OUT Handle Flag
                 val outFraction = (outPointSec / duration).coerceIn(0f, 1f)
+                val outOffsetDp = ((parentMaxWidth - 32.dp) * outFraction).let { if (it < 0.dp) 0.dp else it }
                 Box(
                     modifier = Modifier
-                        .offset(x = (outFraction * (maxWidth - 32.dp)).coerceAtLeast(0.dp))
+                        .offset(x = outOffsetDp)
                         .align(Alignment.BottomStart)
                         .clip(RoundedCornerShape(topEnd = 4.dp))
                         .background(Color(0xFFFF5252))

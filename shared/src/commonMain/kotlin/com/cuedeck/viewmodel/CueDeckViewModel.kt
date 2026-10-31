@@ -1,6 +1,5 @@
 package com.cuedeck.viewmodel
 
-import com.cuedeck.audio.AndroidAudioEngine
 import com.cuedeck.audio.AudioEngine
 import com.cuedeck.diagnostics.ErrorLogger
 import com.cuedeck.model.*
@@ -71,10 +70,16 @@ class CueDeckViewModel(
     }
 
     private fun preloadArmedCue(cue: Cue, showId: String) {
-        if (audioEngine is AndroidAudioEngine) {
-            val basePath = repository.getBasePath(showId)
-            audioEngine.preload(cue, basePath)
-        }
+        val basePath = repository.getBasePath(showId)
+        audioEngine.preload(cue, basePath)
+    }
+
+    fun switchViewMode(mode: ViewMode) {
+        _show.update { it.copy(currentViewMode = mode) }
+    }
+
+    fun armCue(cueId: String) {
+        setArmedCue(cueId)
     }
 
     private fun loadInitialShow() {

@@ -50,6 +50,11 @@ interface AudioEngine {
     fun setMasterVolume(volume: Float)
 
     /**
+     * Pre-buffers the next armed cue in memory for instantaneous zero-latency playback.
+     */
+    fun preload(cue: Cue, basePath: String) {}
+
+    /**
      * Releases all audio resources and worker threads.
      */
     fun release()

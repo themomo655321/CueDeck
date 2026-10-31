@@ -49,7 +49,7 @@ class AndroidAudioEngine(private val context: Context) : AudioEngine {
     private val activeTracks = ConcurrentHashMap<String, AndroidTrack>()
     private var preloadedTrack: Pair<String, MediaPlayer>? = null
 
-    fun preload(cue: Cue, basePath: String) {
+    override fun preload(cue: Cue, basePath: String) {
         engineScope.launch(Dispatchers.IO) {
             try {
                 if (preloadedTrack?.first == cue.id) return@launch
