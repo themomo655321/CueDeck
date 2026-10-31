@@ -113,7 +113,8 @@ fun MainScreen(
 
             if (isWideScreen) {
                 // Landscape Dual-Pane Layout (Tablet / Rotated Phone)
-                // Left: Now Playing + 4 Fader Channels; Right: Standby + Cue Stack + GO Button
+                // Left: 4 Mixer Faders filling the entire left side vertically
+                // Right: Standby + Now Playing (at top of cue stack) + Cue Stack + GO Button
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -121,37 +122,37 @@ fun MainScreen(
                         .padding(8.dp),
                     horizontalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
-                    // Left Column: Now Playing Active Drawer + 4 Mixer Faders
+                    // Left Column: 4 Mixer Faders filling all left side vertically
+                    FaderBank(
+                        mixerSlots = mixerSlots,
+                        queueCount = mixerQueue.size,
+                        faderVolumes = faderVolumes,
+                        faderTailEnabled = faderTailEnabled,
+                        fineModeEnabled = settings.fineModeEnabled,
+                        onFineModeToggle = { viewModel.updateSettings(settings.copy(fineModeEnabled = it)) },
+                        onToggleFaderTail = { viewModel.toggleFaderTail(it) },
+                        onFaderChange = { ch, vol -> viewModel.setFaderVolume(ch, vol) },
+                        modifier = Modifier
+                            .weight(1.05f)
+                            .fillMaxHeight()
+                    )
+
+                    // Right Column: Armed Standby + Now Playing Drawer + Full Height Cue Stack + GO Button
                     Column(
                         verticalArrangement = Arrangement.spacedBy(6.dp),
-                        modifier = Modifier.weight(1f).fillMaxHeight()
-                    ) {
-                        ActiveCuesDrawer(
-                            activePlaybacks = activePlaybacks,
-                            onStopCue = { id, fade -> viewModel.stopActivePlayback(id, fade) },
-                            modifier = Modifier.weight(1f)
-                        )
-
-                        FaderBank(
-                            mixerSlots = mixerSlots,
-                            queueCount = mixerQueue.size,
-                            faderVolumes = faderVolumes,
-                            faderTailEnabled = faderTailEnabled,
-                            fineModeEnabled = settings.fineModeEnabled,
-                            onFineModeToggle = { viewModel.updateSettings(settings.copy(fineModeEnabled = it)) },
-                            onToggleFaderTail = { viewModel.toggleFaderTail(it) },
-                            onFaderChange = { ch, vol -> viewModel.setFaderVolume(ch, vol) }
-                        )
-                    }
-
-                    // Right Column: Armed Standby + Full Height Cue Stack + GO Button
-                    Column(
-                        verticalArrangement = Arrangement.spacedBy(6.dp),
-                        modifier = Modifier.weight(1.3f).fillMaxHeight()
+                        modifier = Modifier
+                            .weight(1.25f)
+                            .fillMaxHeight()
                     ) {
                         ArmedCueCard(
                             armedCue = armedCue,
                             onEditCue = { editingCue = it }
+                        )
+
+                        ActiveCuesDrawer(
+                            activePlaybacks = activePlaybacks,
+                            onStopCue = { id, fade -> viewModel.stopActivePlayback(id, fade) },
+                            modifier = Modifier.fillMaxWidth()
                         )
 
                         CueListSection(
@@ -171,7 +172,9 @@ fun MainScreen(
                                 onHapticFeedback()
                                 viewModel.duplicateCue(it)
                             },
-                            modifier = Modifier.weight(1f).fillMaxWidth()
+                            modifier = Modifier
+                                .weight(1f)
+                                .fillMaxWidth()
                         )
 
                         GoButton(
@@ -180,7 +183,9 @@ fun MainScreen(
                                 onHapticFeedback()
                                 viewModel.pressGo()
                             },
-                            modifier = Modifier.fillMaxWidth().height(64.dp)
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(64.dp)
                         )
                     }
                 }
@@ -258,7 +263,10 @@ fun MainScreen(
                         fineModeEnabled = settings.fineModeEnabled,
                         onFineModeToggle = { viewModel.updateSettings(settings.copy(fineModeEnabled = it)) },
                         onToggleFaderTail = { viewModel.toggleFaderTail(it) },
-                        onFaderChange = { ch, vol -> viewModel.setFaderVolume(ch, vol) }
+                        onFaderChange = { ch, vol -> viewModel.setFaderVolume(ch, vol) },
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(185.dp)
                     )
 
                     // Persistent Full-Width Giant GO Button at bottom

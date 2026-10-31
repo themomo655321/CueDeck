@@ -66,7 +66,7 @@ fun FaderBank(
             .border(1.dp, Color(0xFF2C2C2C), RoundedCornerShape(12.dp))
     ) {
         Column(
-            modifier = Modifier.padding(horizontal = 8.dp, vertical = 6.dp)
+            modifier = Modifier.fillMaxSize().padding(horizontal = 8.dp, vertical = 6.dp)
         ) {
             // Header Bar
             Row(
@@ -121,7 +121,7 @@ fun FaderBank(
                 horizontalArrangement = Arrangement.spacedBy(6.dp),
                 modifier = Modifier
                     .fillMaxWidth()
-                    .height(180.dp)
+                    .weight(1f)
             ) {
                 for (ch in 0..3) {
                     val activeTrack = mixerSlots.getOrNull(ch)
@@ -375,9 +375,9 @@ private fun TactileVerticalFader(
         val normalized = clampedVol / 1.25f
         val capYOffset = travelHeight * (1f - normalized)
 
-        // Option 1: Virtual travel distance (260dp base, 1040dp in FINE mode)
+        // Option 1: Virtual travel distance (260dp base or full physical height, 4x in FINE mode)
         val virtualTravelPx = with(density) {
-            val base = 260.dp.toPx()
+            val base = maxOf(260.dp.toPx(), travelHeight.toPx())
             if (isFineMode) base * 4f else base
         }
 
