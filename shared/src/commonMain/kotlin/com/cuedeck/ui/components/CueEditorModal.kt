@@ -51,7 +51,7 @@ fun CueEditorModal(
     onDelete: (String) -> Unit,
     onDismiss: () -> Unit
 ) {
-    var cueNumber by remember { mutableStateOf(cue.cueNumber) }
+    var cueNumber by remember { mutableStateOf(cue.cueNumber.removeSuffix(".0")) }
     var name by remember { mutableStateOf(cue.name) }
     var volume by remember { mutableStateOf(cue.volume) }
     var fadeInSec by remember { mutableStateOf(cue.fadeInMs / 1000f) }
@@ -445,7 +445,7 @@ fun CueEditorModal(
                 Button(
                     onClick = {
                         val updated = cue.copy(
-                            cueNumber = cueNumber.trim(),
+                            cueNumber = cueNumber.trim().removeSuffix(".0"),
                             name = name.trim(),
                             volume = volume,
                             fadeInMs = (fadeInSec * 1000).toLong(),

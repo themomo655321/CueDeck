@@ -3,8 +3,6 @@ package com.cuedeck.audio
 import android.content.Context
 import android.media.AudioAttributes
 import android.media.MediaPlayer
-import android.media.audiofx.EnvironmentalReverb
-import android.media.audiofx.PresetReverb
 import android.os.Build
 import com.cuedeck.diagnostics.ErrorLogger
 import com.cuedeck.model.ActivePlayback
@@ -51,10 +49,6 @@ class AndroidAudioEngine(private val context: Context) : AudioEngine {
         val endMs: Long,
         var currentVolume: Float,
         var isFadingOut: Boolean = false,
-        var reverbTailEnabled: Boolean = false,
-        var presetReverb: PresetReverb? = null,
-        var environmentalReverb: EnvironmentalReverb? = null,
-        var tailJob: Job? = null,
         var fadeJob: Job? = null,
         var monitorJob: Job? = null,
         val isReleased: AtomicBoolean = AtomicBoolean(false)
@@ -215,9 +209,6 @@ class AndroidAudioEngine(private val context: Context) : AudioEngine {
         } else {
             track.isFadingOut = true
             track.fadeJob = engineScope.launch {
-                if (track.reverbTailEnabled) {
-                    initReverbForTrack(track)
-                }
                 val startVol = track.currentVolume
                 val steps = (fadeOutMs / 50L).coerceAtLeast(1)
                 val delta = startVol / steps
@@ -225,28 +216,8 @@ class AndroidAudioEngine(private val context: Context) : AudioEngine {
                     delay(50)
                     if (track.isReleased.get() || !isActive) break
                     track.currentVolume = (track.currentVolume - delta).coerceAtLeast(0f)
-                    if (track.reverbTailEnabled && track.currentVolume <= 0.05f) {
-                        try {
-                            track.presetReverb?.preset = PresetReverb.PRESET_LARGEHALL
-                            track.presetReverb?.enabled = true
-                        } catch (ignored: Exception) {}
-                    }
                     safeSetVolume(track.player, track.currentVolume)
                 }
-
-                if (track.reverbTailEnabled) {
-                    // Extra 1200ms reverb tail decay for smooth transition
-                    val tailSteps = 24
-                    val tailDelay = 1200L / tailSteps
-                    val tailStart = 0.05f
-                    for (i in 0 until tailSteps) {
-                        delay(tailDelay)
-                        if (track.isReleased.get() || !isActive) break
-                        val decay = kotlin.math.exp(-3f * (i.toFloat() / tailSteps))
-                        safeSetVolume(track.player, tailStart * decay)
-                    }
-                }
-
                 stopTrackInternal(playbackId)
             }
         }
@@ -263,109 +234,11 @@ class AndroidAudioEngine(private val context: Context) : AudioEngine {
         }
     }
 
-    override fun setReverbTail(playbackId: String, enabled: Boolean) {
-        val track = activeTracks[playbackId] ?: return
-        track.reverbTailEnabled = enabled
-        if (enabled) {
-            initReverbForTrack(track)
-        } else {
-            track.tailJob?.cancel()
-            disableReverbForTrack(track)
-        }
-    }
-
-    private fun initReverbForTrack(track: AndroidTrack) {
-        try {
-            val sessionId = track.player.audioSessionId
-            if (sessionId > 0) {
-                if (track.environmentalReverb == null) {
-                    track.environmentalReverb = EnvironmentalReverb(0, sessionId).apply {
-                        decayTime = 2500
-                        roomLevel = -1200
-                        reverbLevel = 0
-                        reverbDelay = 40
-                        enabled = true
-                    }
-                }
-                if (track.presetReverb == null) {
-                    track.presetReverb = PresetReverb(0, sessionId).apply {
-                        preset = PresetReverb.PRESET_LARGEHALL
-                        enabled = true
-                    }
-                }
-            }
-        } catch (e: Exception) {
-            ErrorLogger.error("AndroidAudioEngine", "AudioFX init non-fatal fallback", e)
-        }
-    }
-
-    private fun disableReverbForTrack(track: AndroidTrack) {
-        try {
-            track.environmentalReverb?.enabled = false
-            track.presetReverb?.enabled = false
-        } catch (ignored: Exception) {}
-    }
-
     override fun setTrackVolume(playbackId: String, volume: Float, smoothingMs: Long) {
         val track = activeTracks[playbackId] ?: return
         if (track.isFadingOut || track.isReleased.get()) return
 
         val targetVol = (volume * currentMasterVolume).coerceIn(0f, 1.5f)
-
-        if (track.reverbTailEnabled) {
-            if (targetVol > 0.05f) {
-                track.tailJob?.cancel()
-                try {
-                    track.environmentalReverb?.roomLevel = -3000
-                    track.environmentalReverb?.reverbLevel = -2000
-                } catch (ignored: Exception) {}
-            } else if (targetVol > 0.001f) {
-                track.tailJob?.cancel()
-                initReverbForTrack(track)
-                val wetFactor = ((0.05f - targetVol) / 0.05f).coerceIn(0f, 1f)
-                try {
-                    track.presetReverb?.preset = if (wetFactor > 0.6f) PresetReverb.PRESET_LARGEHALL else PresetReverb.PRESET_LARGEROOM
-                    track.presetReverb?.enabled = true
-                    track.environmentalReverb?.enabled = true
-                    track.environmentalReverb?.roomLevel = (-1200 + (wetFactor * 1200)).toInt().toShort()
-                    track.environmentalReverb?.reverbLevel = (wetFactor * 800).toInt().toShort()
-                    track.environmentalReverb?.decayTime = (2000 + (wetFactor * 1500)).toInt()
-                } catch (ignored: Exception) {}
-            } else {
-                // targetVol == 0f: leave a smooth tail instead of instant hard cutoff
-                if (track.currentVolume > 0.001f && track.tailJob?.isActive != true) {
-                    initReverbForTrack(track)
-                    track.tailJob?.cancel()
-                    track.fadeJob?.cancel()
-                    track.tailJob = engineScope.launch {
-                        try {
-                            track.presetReverb?.preset = PresetReverb.PRESET_LARGEHALL
-                            track.presetReverb?.enabled = true
-                            track.environmentalReverb?.enabled = true
-                        } catch (ignored: Exception) {}
-
-                        val tailDurationMs = 1800L
-                        val steps = 36
-                        val stepDelay = tailDurationMs / steps
-                        val startVol = (track.currentVolume).coerceIn(0.04f, 0.12f)
-                        for (i in 0 until steps) {
-                            delay(stepDelay)
-                            if (track.isReleased.get() || !isActive) break
-                            val progress = i.toFloat() / steps
-                            val decay = kotlin.math.exp(-3f * progress)
-                            safeSetVolume(track.player, startVol * decay)
-                        }
-                        safeSetVolume(track.player, 0f)
-                        track.currentVolume = 0f
-                        try {
-                            track.presetReverb?.enabled = false
-                            track.environmentalReverb?.enabled = false
-                        } catch (ignored: Exception) {}
-                    }
-                    return
-                }
-            }
-        }
 
         if (smoothingMs <= 0L) {
             track.fadeJob?.cancel()
@@ -615,15 +488,6 @@ class AndroidAudioEngine(private val context: Context) : AudioEngine {
                 try {
                     track.fadeJob?.cancel()
                     track.monitorJob?.cancel()
-                    track.tailJob?.cancel()
-                    try {
-                        track.presetReverb?.enabled = false
-                        track.presetReverb?.release()
-                    } catch (ignored: Exception) {}
-                    try {
-                        track.environmentalReverb?.enabled = false
-                        track.environmentalReverb?.release()
-                    } catch (ignored: Exception) {}
                     if (safeIsPlaying(track.player)) track.player.stop()
                     track.player.release()
                 } catch (ignored: Exception) {}

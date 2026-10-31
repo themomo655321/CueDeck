@@ -37,9 +37,6 @@ class CueDeckViewModel(
     private val _faderVolumes = MutableStateFlow(listOf(1.0f, 1.0f, 1.0f, 1.0f))
     val faderVolumes: StateFlow<List<Float>> = _faderVolumes.asStateFlow()
 
-    private val _faderTailEnabled = MutableStateFlow(listOf(false, false, false, false))
-    val faderTailEnabled: StateFlow<List<Boolean>> = _faderTailEnabled.asStateFlow()
-
     private val _saveFeedback = MutableStateFlow<String?>(null)
     val saveFeedback: StateFlow<String?> = _saveFeedback.asStateFlow()
     private var feedbackJob: Job? = null
@@ -131,8 +128,6 @@ class CueDeckViewModel(
             if (emptySlotIndex != -1) {
                 currentSlots[emptySlotIndex] = newTrack
                 val faderVol = _faderVolumes.value.getOrElse(emptySlotIndex) { 1.0f }
-                val isTailOn = _faderTailEnabled.value.getOrElse(emptySlotIndex) { false }
-                audioEngine.setReverbTail(newTrack.playbackId, isTailOn)
                 audioEngine.setTrackVolume(newTrack.playbackId, faderVol, 0L)
             } else {
                 currentQueue.add(newTrack)
@@ -146,8 +141,6 @@ class CueDeckViewModel(
             if (freeIndex != -1) {
                 currentSlots[freeIndex] = nextTrack
                 val faderVol = _faderVolumes.value.getOrElse(freeIndex) { 1.0f }
-                val isTailOn = _faderTailEnabled.value.getOrElse(freeIndex) { false }
-                audioEngine.setReverbTail(nextTrack.playbackId, isTailOn)
                 audioEngine.setTrackVolume(nextTrack.playbackId, faderVol, 0L)
             }
         }
@@ -165,10 +158,20 @@ class CueDeckViewModel(
         setArmedCue(cueId)
     }
 
+    private fun sanitizeCues(cues: List<Cue>): List<Cue> {
+        return cues.map { cue ->
+            if (cue.cueNumber.endsWith(".0")) {
+                cue.copy(cueNumber = cue.cueNumber.removeSuffix(".0"))
+            } else {
+                cue
+            }
+        }
+    }
+
     private fun loadInitialShow() {
         val existing = repository.loadLastActiveShow()
         if (existing != null) {
-            _show.value = existing
+            _show.value = existing.copy(cues = sanitizeCues(existing.cues))
             audioEngine.setMasterVolume(existing.masterVolume)
         } else {
             saveCurrentShow()
@@ -260,24 +263,8 @@ class CueDeckViewModel(
 
             val activeTrack = _mixerSlots.value.getOrNull(channelIndex)
             if (activeTrack != null) {
-                val isTailOn = _faderTailEnabled.value.getOrElse(channelIndex) { false }
-                audioEngine.setReverbTail(activeTrack.playbackId, isTailOn)
                 // 0ms smoothing on live manual fader control eliminates touch cancellation audio lag
                 audioEngine.setTrackVolume(activeTrack.playbackId, clamped, 0L)
-            }
-        }
-    }
-
-    fun toggleFaderTail(channelIndex: Int) {
-        val list = _faderTailEnabled.value.toMutableList()
-        if (channelIndex in list.indices) {
-            val newState = !list[channelIndex]
-            list[channelIndex] = newState
-            _faderTailEnabled.value = list
-
-            val activeTrack = _mixerSlots.value.getOrNull(channelIndex)
-            if (activeTrack != null) {
-                audioEngine.setReverbTail(activeTrack.playbackId, newState)
             }
         }
     }
@@ -342,10 +329,11 @@ class CueDeckViewModel(
 
     fun addCue(cue: Cue) {
         _show.update { show ->
-            val updatedCues = show.cues + cue
+            val cleanCue = if (cue.cueNumber.endsWith(".0")) cue.copy(cueNumber = cue.cueNumber.removeSuffix(".0")) else cue
+            val updatedCues = show.cues + cleanCue
             show.copy(
                 cues = updatedCues,
-                armedCueId = show.armedCueId ?: cue.id
+                armedCueId = show.armedCueId ?: cleanCue.id
             )
         }
         saveCurrentShow()
@@ -353,7 +341,8 @@ class CueDeckViewModel(
 
     fun updateCue(updatedCue: Cue) {
         _show.update { show ->
-            show.copy(cues = show.cues.map { if (it.id == updatedCue.id) updatedCue else it })
+            val cleanCue = if (updatedCue.cueNumber.endsWith(".0")) updatedCue.copy(cueNumber = updatedCue.cueNumber.removeSuffix(".0")) else updatedCue
+            show.copy(cues = show.cues.map { if (it.id == cleanCue.id) cleanCue else it })
         }
         saveCurrentShow()
     }
@@ -397,9 +386,9 @@ class CueDeckViewModel(
             val list = show.cues.toMutableList()
             val item = list.removeAt(fromIndex)
             list.add(toIndex, item)
-            // Renumber cues sequentially 1.0, 2.0, 3.0...
+            // Renumber cues sequentially 1, 2, 3...
             val renumbered = list.mapIndexed { idx, cue ->
-                cue.copy(cueNumber = "%.1f".format(idx + 1.0))
+                cue.copy(cueNumber = "${idx + 1}")
             }
             show.copy(cues = renumbered)
         }
@@ -437,7 +426,7 @@ class CueDeckViewModel(
             val list = show.cues.toMutableList()
             list.add(index + 1, duplicated)
             val renumbered = list.mapIndexed { idx, cue ->
-                cue.copy(cueNumber = "%.1f".format(idx + 1.0))
+                cue.copy(cueNumber = "${idx + 1}")
             }
             show.copy(cues = renumbered)
         }
@@ -462,10 +451,10 @@ class CueDeckViewModel(
 
                 if (isActive && results.isNotEmpty()) {
                     for (result in results) {
-                        val nextNum = (_show.value.cues.size + 1).toDouble()
+                        val nextNum = _show.value.cues.size + 1
                         val newCue = Cue(
                             id = UUID.randomUUID().toString(),
-                            cueNumber = "%.1f".format(nextNum),
+                            cueNumber = "$nextNum",
                             name = result.title,
                             audioRelativePath = result.relativePath,
                             originalFileName = result.fileName,
@@ -537,12 +526,27 @@ class CueDeckViewModel(
         showSaveFeedback("Created: $title ✓")
     }
 
+    fun cycleFineMultiplier() {
+        val current = _settings.value.fineMultiplier
+        val next = when (current) {
+            0 -> 4
+            4 -> 8
+            8 -> 16
+            else -> 0
+        }
+        updateSettings(_settings.value.copy(
+            fineMultiplier = next,
+            fineModeEnabled = next > 0,
+            fineTuneRatio = if (next > 0) next.toFloat() else 4.0f
+        ))
+    }
+
     fun loadShowById(showId: String) {
         val loaded = repository.loadShow(showId)
         if (loaded != null) {
             coroutineScope.launch {
                 audioEngine.stopAll(fadeOutMs = 0L)
-                _show.value = loaded
+                _show.value = loaded.copy(cues = sanitizeCues(loaded.cues))
                 refreshSavedShows()
                 showSaveFeedback("Loaded: ${loaded.title} ✓")
             }

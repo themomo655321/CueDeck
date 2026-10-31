@@ -75,7 +75,7 @@ fun ArmedCueCard(
 
                 if (armedCue != null) {
                     Text(
-                        text = armedCue.cueNumber,
+                        text = armedCue.cueNumber.removeSuffix(".0"),
                         fontSize = 13.sp,
                         fontWeight = FontWeight.Black,
                         color = Color(0xFF00E5FF)

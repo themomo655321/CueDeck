@@ -37,7 +37,6 @@ fun MainScreen(
     val mixerSlots by viewModel.mixerSlots.collectAsState()
     val mixerQueue by viewModel.mixerQueue.collectAsState()
     val faderVolumes by viewModel.faderVolumes.collectAsState()
-    val faderTailEnabled by viewModel.faderTailEnabled.collectAsState()
     val settings by viewModel.settings.collectAsState()
     val saveFeedback by viewModel.saveFeedback.collectAsState()
     val storageInspection by viewModel.storageInspection.collectAsState()
@@ -152,7 +151,7 @@ fun MainScreen(
                                         onMoveDown = { viewModel.moveCueDown(it) },
                                         onMoveCue = { from, to -> viewModel.moveCue(from, to) },
                                         onDuplicateCue = { onHapticFeedback(); viewModel.duplicateCue(it) },
-                                        modifier = Modifier.fillMaxSize().heightIn(min = 140.dp)
+                                        modifier = Modifier.fillMaxSize()
                                     )
                                 }
                             }
@@ -168,10 +167,8 @@ fun MainScreen(
                                 mixerSlots = mixerSlots,
                                 queueCount = mixerQueue.size,
                                 faderVolumes = faderVolumes,
-                                faderTailEnabled = faderTailEnabled,
-                                fineModeEnabled = settings.fineModeEnabled,
-                                onFineModeToggle = { viewModel.updateSettings(settings.copy(fineModeEnabled = it)) },
-                                onToggleFaderTail = { viewModel.toggleFaderTail(it) },
+                                fineMultiplier = settings.fineMultiplier,
+                                onCycleFineMultiplier = { viewModel.cycleFineMultiplier() },
                                 onFaderChange = { ch, vol -> viewModel.setFaderVolume(ch, vol) },
                                 modifier = Modifier.fillMaxWidth().height(workspaceLayoutState.currentFaderHeightDp.dp)
                             )
@@ -201,10 +198,8 @@ fun MainScreen(
                                     mixerSlots = mixerSlots,
                                     queueCount = mixerQueue.size,
                                     faderVolumes = faderVolumes,
-                                    faderTailEnabled = faderTailEnabled,
-                                    fineModeEnabled = settings.fineModeEnabled,
-                                    onFineModeToggle = { viewModel.updateSettings(settings.copy(fineModeEnabled = it)) },
-                                    onToggleFaderTail = { viewModel.toggleFaderTail(it) },
+                                    fineMultiplier = settings.fineMultiplier,
+                                    onCycleFineMultiplier = { viewModel.cycleFineMultiplier() },
                                     onFaderChange = { ch, vol -> viewModel.setFaderVolume(ch, vol) },
                                     modifier = Modifier
                                         .weight(leftRatio)
@@ -253,10 +248,8 @@ fun MainScreen(
                                     mixerSlots = mixerSlots,
                                     queueCount = mixerQueue.size,
                                     faderVolumes = faderVolumes,
-                                    faderTailEnabled = faderTailEnabled,
-                                    fineModeEnabled = settings.fineModeEnabled,
-                                    onFineModeToggle = { viewModel.updateSettings(settings.copy(fineModeEnabled = it)) },
-                                    onToggleFaderTail = { viewModel.toggleFaderTail(it) },
+                                    fineMultiplier = settings.fineMultiplier,
+                                    onCycleFineMultiplier = { viewModel.cycleFineMultiplier() },
                                     onFaderChange = { ch, vol -> viewModel.setFaderVolume(ch, vol) },
                                     modifier = Modifier
                                         .weight(rightRatio)
@@ -317,7 +310,7 @@ fun MainScreen(
                                         onMoveDown = { viewModel.moveCueDown(it) },
                                         onMoveCue = { from, to -> viewModel.moveCue(from, to) },
                                         onDuplicateCue = { onHapticFeedback(); viewModel.duplicateCue(it) },
-                                        modifier = Modifier.fillMaxSize().heightIn(min = 140.dp)
+                                        modifier = Modifier.fillMaxSize()
                                     )
                                 }
                             }
@@ -333,10 +326,8 @@ fun MainScreen(
                                 mixerSlots = mixerSlots,
                                 queueCount = mixerQueue.size,
                                 faderVolumes = faderVolumes,
-                                faderTailEnabled = faderTailEnabled,
-                                fineModeEnabled = settings.fineModeEnabled,
-                                onFineModeToggle = { viewModel.updateSettings(settings.copy(fineModeEnabled = it)) },
-                                onToggleFaderTail = { viewModel.toggleFaderTail(it) },
+                                fineMultiplier = settings.fineMultiplier,
+                                onCycleFineMultiplier = { viewModel.cycleFineMultiplier() },
                                 onFaderChange = { ch, vol -> viewModel.setFaderVolume(ch, vol) },
                                 modifier = Modifier.fillMaxWidth().height(workspaceLayoutState.currentFaderHeightDp.dp)
                             )
@@ -377,7 +368,7 @@ fun MainScreen(
                                     onMoveDown = { viewModel.moveCueDown(it) },
                                     onMoveCue = { from, to -> viewModel.moveCue(from, to) },
                                     onDuplicateCue = { onHapticFeedback(); viewModel.duplicateCue(it) },
-                                    modifier = Modifier.fillMaxSize().heightIn(min = 140.dp)
+                                    modifier = Modifier.fillMaxSize()
                                 )
                             }
 
@@ -392,10 +383,8 @@ fun MainScreen(
                                 mixerSlots = mixerSlots,
                                 queueCount = mixerQueue.size,
                                 faderVolumes = faderVolumes,
-                                faderTailEnabled = faderTailEnabled,
-                                fineModeEnabled = settings.fineModeEnabled,
-                                onFineModeToggle = { viewModel.updateSettings(settings.copy(fineModeEnabled = it)) },
-                                onToggleFaderTail = { viewModel.toggleFaderTail(it) },
+                                fineMultiplier = settings.fineMultiplier,
+                                onCycleFineMultiplier = { viewModel.cycleFineMultiplier() },
                                 onFaderChange = { ch, vol -> viewModel.setFaderVolume(ch, vol) },
                                 modifier = Modifier.fillMaxWidth().height(workspaceLayoutState.currentFaderHeightDp.dp)
                             )
@@ -667,7 +656,7 @@ private fun CueStackAndControlsColumn(
             activePlaybacks = activePlaybacks,
             onStopCue = { id, fade -> viewModel.stopActivePlayback(id, fade) },
             modifier = Modifier.fillMaxWidth(),
-            maxHeightDp = 68
+            maxHeightDp = 58
         )
 
         CueListSection(
@@ -683,7 +672,6 @@ private fun CueStackAndControlsColumn(
             onDuplicateCue = { onHapticFeedback(); viewModel.duplicateCue(it) },
             modifier = Modifier
                 .weight(1f)
-                .heightIn(min = 140.dp)
                 .fillMaxWidth()
         )
 
@@ -692,7 +680,7 @@ private fun CueStackAndControlsColumn(
             onGoClick = { onHapticFeedback(); viewModel.pressGo() },
             modifier = Modifier
                 .fillMaxWidth()
-                .height(54.dp)
+                .height(50.dp)
         )
     }
 }

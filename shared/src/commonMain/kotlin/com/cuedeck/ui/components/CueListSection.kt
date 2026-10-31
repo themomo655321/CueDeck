@@ -222,7 +222,7 @@ private fun CueRow(
 
             // Cue Number
             Text(
-                text = cue.cueNumber,
+                text = cue.cueNumber.removeSuffix(".0"),
                 fontSize = 14.sp,
                 fontWeight = FontWeight.Bold,
                 color = if (isArmed || isDragging) ArmedBlue else Color.White,

@@ -3,7 +3,6 @@ package com.cuedeck.ui.components
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
-import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -18,8 +17,6 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.draw.shadow
-import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalDensity
@@ -28,7 +25,6 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.compose.ui.zIndex
 import com.cuedeck.model.ActivePlayback
 import com.cuedeck.ui.theme.DarkSurface
 import com.cuedeck.ui.theme.PanicRed
@@ -40,7 +36,7 @@ import kotlin.math.sign
 
 /**
  * 4-Channel Live Audio Fader Console with Stage Precision:
- * 1. [FINE] Elastic Throttle Chasing Mode
+ * 1. [FINE] Multi-Ratio Gear Cycle: OFF -> 4X -> 8X -> 16X -> OFF
  * 2. [+] and [−] Nudge Stepper Buttons (1% micro steps)
  * 3. Double-Tap Reset to 100% (0.0 dB unity gain)
  * 4. Zero-latency instant audio response on physical drag
@@ -50,15 +46,11 @@ fun FaderBank(
     mixerSlots: List<ActivePlayback?>,
     queueCount: Int = 0,
     faderVolumes: List<Float>,
-    faderTailEnabled: List<Boolean> = listOf(false, false, false, false),
-    fineModeEnabled: Boolean = false,
-    onFineModeToggle: (Boolean) -> Unit = {},
-    onToggleFaderTail: (Int) -> Unit = {},
+    fineMultiplier: Int = 0, // 0 = OFF, 4 = 4X, 8 = 8X, 16 = 16X
+    onCycleFineMultiplier: () -> Unit = {},
     onFaderChange: (channelIndex: Int, volume: Float) -> Unit,
     modifier: Modifier = Modifier
 ) {
-    var localFineMode by remember(fineModeEnabled) { mutableStateOf(fineModeEnabled) }
-
     Surface(
         color = DarkSurface,
         shape = RoundedCornerShape(12.dp),
@@ -86,22 +78,37 @@ fun FaderBank(
                     )
                     Spacer(modifier = Modifier.width(8.dp))
 
-                    // Option A: [FINE] Mode Toggle Button
+                    // Multi-Gear [FINE] Mode Cycle Button: OFF -> 4X -> 8X -> 16X -> OFF
+                    val fineBgColor = when (fineMultiplier) {
+                        4 -> Color(0xFF00E5FF) // Cyan
+                        8 -> Color(0xFFFFB300) // Amber
+                        16 -> Color(0xFFE040FB) // Magenta
+                        else -> Color(0xFF282828)
+                    }
+                    val fineTextColor = when (fineMultiplier) {
+                        4, 8 -> Color.Black
+                        16 -> Color.White
+                        else -> Color.LightGray
+                    }
+                    val fineText = when (fineMultiplier) {
+                        4 -> "FINE 4X"
+                        8 -> "FINE 8X"
+                        16 -> "FINE 16X"
+                        else -> "FINE OFF"
+                    }
+
                     Box(
                         modifier = Modifier
                             .clip(RoundedCornerShape(4.dp))
-                            .background(if (localFineMode) Color(0xFF00E5FF) else Color(0xFF282828))
-                            .clickable {
-                                localFineMode = !localFineMode
-                                onFineModeToggle(localFineMode)
-                            }
+                            .background(fineBgColor)
+                            .clickable { onCycleFineMultiplier() }
                             .padding(horizontal = 6.dp, vertical = 2.dp)
                     ) {
                         Text(
-                            text = if (localFineMode) "FINE 4X ON" else "FINE OFF",
+                            text = fineText,
                             fontSize = 9.sp,
                             fontWeight = FontWeight.Black,
-                            color = if (localFineMode) Color.Black else Color.LightGray
+                            color = fineTextColor
                         )
                     }
                 }
@@ -133,9 +140,7 @@ fun FaderBank(
                         channelNumber = ch + 1,
                         activePlayback = activeTrack,
                         volume = volume,
-                        isFineMode = localFineMode,
-                        isTailEnabled = faderTailEnabled.getOrElse(ch) { false },
-                        onToggleTail = { onToggleFaderTail(ch) },
+                        fineMultiplier = fineMultiplier,
                         onVolumeChange = { onFaderChange(ch, it) },
                         modifier = Modifier.weight(1f)
                     )
@@ -150,9 +155,7 @@ private fun FaderChannelStrip(
     channelNumber: Int,
     activePlayback: ActivePlayback?,
     volume: Float,
-    isFineMode: Boolean,
-    isTailEnabled: Boolean,
-    onToggleTail: () -> Unit,
+    fineMultiplier: Int,
     onVolumeChange: (Float) -> Unit,
     modifier: Modifier = Modifier
 ) {
@@ -211,7 +214,7 @@ private fun FaderChannelStrip(
                     .padding(vertical = 1.dp)
             )
 
-            // Option B: Nudge Steppers & Percentage Readout
+            // Nudge Steppers & Percentage Readout
             Row(
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.SpaceBetween,
@@ -271,7 +274,7 @@ private fun FaderChannelStrip(
                 channelNumber = channelNumber,
                 trackName = activePlayback?.cueName ?: "CH $channelNumber",
                 volume = volume,
-                isFineMode = isFineMode,
+                fineMultiplier = fineMultiplier,
                 isAssigned = isAssigned,
                 accentColor = accentColor,
                 onVolumeChange = onVolumeChange,
@@ -282,66 +285,40 @@ private fun FaderChannelStrip(
 
             Spacer(modifier = Modifier.height(4.dp))
 
-            // Bottom Controls: Quick Mute & Reverb Tail Toggle
-            Row(
-                horizontalArrangement = Arrangement.spacedBy(3.dp),
+            // Bottom Control: Full-Width Quick MUTE Button
+            Box(
+                contentAlignment = Alignment.Center,
                 modifier = Modifier
                     .fillMaxWidth()
-                    .height(20.dp)
+                    .height(22.dp)
+                    .clip(RoundedCornerShape(4.dp))
+                    .background(if (volume <= 0.001f) PanicRed else Color(0xFF262626))
+                    .border(
+                        width = 1.dp,
+                        color = if (volume <= 0.001f) PanicRed else Color(0xFF333333),
+                        shape = RoundedCornerShape(4.dp)
+                    )
+                    .clickable {
+                        if (volume > 0f) onVolumeChange(0f) else onVolumeChange(1.0f)
+                    }
             ) {
-                // Quick Mute / Reset Button
-                Box(
-                    contentAlignment = Alignment.Center,
-                    modifier = Modifier
-                        .weight(1.2f)
-                        .fillMaxHeight()
-                        .clip(RoundedCornerShape(4.dp))
-                        .background(if (volume <= 0.001f) PanicRed else Color(0xFF282828))
-                        .clickable {
-                            if (volume > 0f) onVolumeChange(0f) else onVolumeChange(1.0f)
-                        }
-                ) {
-                    Text(
-                        text = if (volume <= 0.001f) "MUTED" else "MUTE",
-                        fontSize = 8.sp,
-                        fontWeight = FontWeight.Black,
-                        color = if (volume <= 0.001f) Color.White else Color.Gray
-                    )
-                }
-
-                // Reverb Fadeout Tail Button
-                Box(
-                    contentAlignment = Alignment.Center,
-                    modifier = Modifier
-                        .weight(1.1f)
-                        .fillMaxHeight()
-                        .clip(RoundedCornerShape(4.dp))
-                        .background(if (isTailEnabled) Color(0xFF7B1FA2) else Color(0xFF222222))
-                        .border(
-                            width = 1.dp,
-                            color = if (isTailEnabled) Color(0xFFCE93D8) else Color(0xFF333333),
-                            shape = RoundedCornerShape(4.dp)
-                        )
-                        .clickable { onToggleTail() }
-                ) {
-                    Text(
-                        text = if (isTailEnabled) "✦ TAIL" else "TAIL",
-                        fontSize = 8.sp,
-                        fontWeight = FontWeight.Black,
-                        color = if (isTailEnabled) Color.White else Color(0xFF777777)
-                    )
-                }
+                Text(
+                    text = if (volume <= 0.001f) "MUTED" else "MUTE",
+                    fontSize = 9.sp,
+                    fontWeight = FontWeight.Black,
+                    color = if (volume <= 0.001f) Color.White else Color.Gray,
+                    letterSpacing = 0.5.sp
+                )
             }
         }
     }
 }
 
 /**
- * Option 1: Virtual Infinite Canvas + Floating Value HUD Tactile Fader.
- * - Virtual Travel: Expands 65dp physical travel to a 260dp virtual canvas (4x precision).
- * - Infinite Tracking: Finger can slide up past the fader box without stopping.
+ * Virtual Infinite Canvas + Floating Value HUD Tactile Fader.
+ * - Virtual Travel: Scales precision based on fineMultiplier (4x, 8x, 16x).
+ * - Elastic Chasing: When fineMultiplier > 0, tracks glide smoothly to finger position at gear-ratio speed.
  * - Floating HUD: High-contrast bubble floats above the thumb showing % and dB.
- * - Natural Audio Taper: Silky 0.1dB control near unity 0dB.
  * - Double-Tap: Resets to 100% (0.0 dB).
  */
 @Composable
@@ -349,7 +326,7 @@ private fun TactileVerticalFader(
     channelNumber: Int,
     trackName: String,
     volume: Float,
-    isFineMode: Boolean,
+    fineMultiplier: Int,
     isAssigned: Boolean,
     accentColor: Color,
     onVolumeChange: (Float) -> Unit,
@@ -370,21 +347,19 @@ private fun TactileVerticalFader(
         }
     }
 
-    // Option A: Elastic Throttle Chasing Fader Loop in FINE mode
-    LaunchedEffect(isHolding, isFineMode, targetVol) {
-        if (!isHolding || !isFineMode) return@LaunchedEffect
-        while (isHolding && isFineMode) {
+    // Elastic Throttle Chasing Fader Loop in FINE mode
+    LaunchedEffect(isHolding, fineMultiplier, targetVol) {
+        if (!isHolding || fineMultiplier <= 0) return@LaunchedEffect
+        while (isHolding && fineMultiplier > 0) {
             delay(16)
             val dt = 0.016f
 
             val currentTarget = targetVol ?: break
             val diff = currentTarget - currentDisplayVol
-            if (abs(diff) > 0.002f) {
-                // Elastic Throttle Speed:
-                // Close to target (<= 0.10f diff): ~0.05f/sec (0.05dB micro steps)
-                // Far from target (>= 0.70f diff): up to ~0.28f/sec (swift transition)
+            if (abs(diff) > 0.001f) {
                 val normalizedDist = (abs(diff) / 1.25f).coerceIn(0f, 1f)
-                val speed = 0.05f + (normalizedDist * 0.23f)
+                val speedMultiplier = 4f / fineMultiplier.toFloat()
+                val speed = (0.05f + (normalizedDist * 0.23f)) * speedMultiplier
                 val step = (speed * dt).coerceAtMost(abs(diff))
 
                 val newVol = (currentDisplayVol + sign(diff) * step).coerceIn(0f, 1.25f)
@@ -405,16 +380,16 @@ private fun TactileVerticalFader(
         val normalized = clampedVol / 1.25f
         val capYOffset = travelHeight * (1f - normalized)
 
-        // Option 1: Virtual travel distance (260dp base or full physical height, 4x in FINE mode)
+        // Virtual travel distance (scales with fine gear ratio)
         val virtualTravelPx = with(density) {
             val base = maxOf(260.dp.toPx(), travelHeight.toPx())
-            if (isFineMode) base * 4f else base
+            if (fineMultiplier > 0) base * fineMultiplier.toFloat() else base
         }
 
         Box(
             modifier = Modifier
                 .fillMaxSize()
-                .pointerInput(faderCapHeightPx, isFineMode, virtualTravelPx) {
+                .pointerInput(faderCapHeightPx, fineMultiplier, virtualTravelPx) {
                     var lastTapTime = 0L
                     var lastTapY = 0f
 
@@ -427,7 +402,6 @@ private fun TactileVerticalFader(
 
                         if (isDoubleTap) {
                             down.consume()
-                            // Double tap resets instantly to 100% (1.0f / 0.0dB)
                             currentDisplayVol = 1.0f
                             onVolumeChange(1.0f)
                             while (true) {
@@ -445,7 +419,7 @@ private fun TactileVerticalFader(
                         isHolding = true
 
                         val travelHeightPx = travelHeight.toPx()
-                        if (isFineMode) {
+                        if (fineMultiplier > 0) {
                             val touchY = (down.position.y - faderCapHeightPx / 2f).coerceIn(0f, travelHeightPx)
                             targetVol = ((1f - (touchY / travelHeightPx)) * 1.25f).coerceIn(0f, 1.25f)
                         }
@@ -463,7 +437,7 @@ private fun TactileVerticalFader(
                             }
                             pointer.consume()
 
-                            if (isFineMode) {
+                            if (fineMultiplier > 0) {
                                 // Finger position dynamically steers pursuit target
                                 val touchY = (pointer.position.y - faderCapHeightPx / 2f).coerceIn(0f, travelHeightPx)
                                 targetVol = ((1f - (touchY / travelHeightPx)) * 1.25f).coerceIn(0f, 1.25f)
@@ -515,94 +489,97 @@ private fun TactileVerticalFader(
             )
 
             // Target pursuit indicator dot when in FINE mode
-            if (isFineMode && isHolding && targetVol != null) {
+            if (fineMultiplier > 0 && isHolding && targetVol != null) {
                 val targetNorm = (targetVol!! / 1.25f).coerceIn(0f, 1f)
                 val targetYOffset = travelHeight * (1f - targetNorm) + (faderCapHeight / 2) - 4.dp
+                val dotColor = when (fineMultiplier) {
+                    4 -> Color(0xFF00E5FF)
+                    8 -> Color(0xFFFFB300)
+                    16 -> Color(0xFFE040FB)
+                    else -> Color(0xFF00E5FF)
+                }
                 Box(
                     modifier = Modifier
                         .offset(y = targetYOffset)
                         .align(Alignment.TopCenter)
                         .size(8.dp)
                         .clip(CircleShape)
-                        .background(Color(0xFF00E5FF))
+                        .background(dotColor)
                         .border(1.dp, Color.White, CircleShape)
                 )
             }
 
-            // Option 1: Floating Value HUD Bubble (Floats above finger, never blocked by thumb)
+            // Floating Value HUD Bubble
             AnimatedVisibility(
                 visible = isDragging,
                 enter = fadeIn(),
                 exit = fadeOut(),
                 modifier = Modifier
+                    .offset(y = (capYOffset - 36.dp).coerceAtLeast(0.dp))
                     .align(Alignment.TopCenter)
-                    .zIndex(100f)
             ) {
                 val isUnity = abs(clampedVol - 1.0f) < 0.02f
-                val dBVal = if (clampedVol <= 0.001f) "-∞ dB" else "%.1f dB".format(20 * log10(clampedVol))
-                val pctVal = "${(clampedVol * 100).roundToInt()}%"
-
+                val dBVal = if (clampedVol <= 0.001f) "-inf dB" else "%.1f dB".format(20 * log10(clampedVol))
                 Surface(
-                    color = Color(0xFF0D1B2A),
+                    color = Color(0xFF141414),
                     shape = RoundedCornerShape(6.dp),
-                    shadowElevation = 10.dp,
-                    border = BorderStroke(1.5.dp, if (isUnity) Color(0xFF00E676) else Color(0xFF00E5FF)),
-                    modifier = Modifier
-                        .offset(y = (-36).dp)
-                        .widthIn(min = 60.dp)
+                    border = androidx.compose.foundation.BorderStroke(
+                        width = 1.dp,
+                        color = if (isUnity) Color(0xFF00E676) else Color(0xFF00E5FF)
+                    ),
+                    shadowElevation = 8.dp,
+                    modifier = Modifier.padding(bottom = 4.dp)
                 ) {
-                    Column(
-                        horizontalAlignment = Alignment.CenterHorizontally,
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
                         modifier = Modifier.padding(horizontal = 6.dp, vertical = 3.dp)
                     ) {
                         Text(
-                            text = pctVal,
+                            text = if (clampedVol <= 0.001f) "-inf" else "${(clampedVol * 100).roundToInt()}%",
                             fontSize = 11.sp,
                             fontWeight = FontWeight.Black,
-                            color = if (isUnity) Color(0xFF00E676) else Color.White
+                            color = if (clampedVol <= 0.001f) PanicRed else Color(0xFF00E5FF)
                         )
+                        Spacer(modifier = Modifier.width(4.dp))
                         Text(
-                            text = dBVal,
+                            text = if (isUnity) "0.0dB" else dBVal,
                             fontSize = 9.sp,
                             fontWeight = FontWeight.Bold,
-                            color = if (clampedVol <= 0.001f) PanicRed else Color(0xFF00E5FF)
+                            color = if (isUnity) Color(0xFF00E676) else Color.LightGray
                         )
                     }
                 }
             }
 
-            // Physical Tactile Fader Cap
+            // Tactile Fader Cap
             val isUnity = abs(clampedVol - 1.0f) < 0.02f
-            Box(
+            Surface(
+                color = if (clampedVol <= 0.001f) Color(0xFF2E1A1A) else Color(0xFF2E2E2E),
+                shape = RoundedCornerShape(4.dp),
+                border = androidx.compose.foundation.BorderStroke(
+                    width = 1.5.dp,
+                    color = if (isUnity) Color(0xFF00E676) else if (isAssigned) accentColor else Color(0xFF555555)
+                ),
+                shadowElevation = if (isDragging) 8.dp else 4.dp,
                 modifier = Modifier
+                    .width(38.dp)
+                    .height(faderCapHeight)
                     .offset(y = capYOffset)
                     .align(Alignment.TopCenter)
-                    .width(36.dp)
-                    .height(faderCapHeight)
-                    .shadow(elevation = if (isDragging) 8.dp else 4.dp, shape = RoundedCornerShape(4.dp))
-                    .clip(RoundedCornerShape(4.dp))
-                    .background(
-                        Brush.verticalGradient(
-                            colors = if (isDragging) {
-                                listOf(Color(0xFF555555), Color(0xFF383838), Color(0xFF262626))
-                            } else {
-                                listOf(Color(0xFF444444), Color(0xFF2C2C2C), Color(0xFF202020))
-                            }
-                        )
-                    )
-                    .border(
-                        width = if (isDragging) 1.5.dp else 1.dp,
-                        color = if (isDragging) Color(0xFF00E5FF) else if (isAssigned) accentColor else Color(0xFF555555),
-                        shape = RoundedCornerShape(4.dp)
-                    ),
-                contentAlignment = Alignment.Center
             ) {
-                Box(
-                    modifier = Modifier
-                        .fillMaxWidth(0.7f)
-                        .height(2.5.dp)
-                        .background(if (isUnity) Color(0xFF00E676) else if (isAssigned) accentColor else Color.White)
-                )
+                Box(contentAlignment = Alignment.Center, modifier = Modifier.fillMaxSize()) {
+                    Box(
+                        modifier = Modifier
+                            .width(26.dp)
+                            .height(2.5.dp)
+                            .clip(RoundedCornerShape(1.dp))
+                            .background(
+                                if (clampedVol <= 0.001f) PanicRed
+                                else if (isUnity) Color(0xFF00E676)
+                                else Color.White
+                            )
+                    )
+                }
             }
         }
     }

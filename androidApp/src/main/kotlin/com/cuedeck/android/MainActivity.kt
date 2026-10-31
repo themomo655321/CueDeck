@@ -218,7 +218,7 @@ class MainActivity : ComponentActivity() {
                 retriever.release()
 
                 val cueCount = viewModel.show.value.cues.size
-                val cueNumber = "${cueCount + 1}.0"
+                val cueNumber = "${cueCount + 1}"
                 val cleanTitle = fileName.substringBeforeLast(".")
 
                 val newCue = Cue(

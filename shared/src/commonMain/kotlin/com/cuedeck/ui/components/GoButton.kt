@@ -78,7 +78,7 @@ fun GoButton(
             if (armedCue != null) {
                 Spacer(modifier = Modifier.height(2.dp))
                 Text(
-                    text = "${armedCue.cueNumber} - ${armedCue.name}",
+                    text = "${armedCue.cueNumber.removeSuffix(".0")} - ${armedCue.name}",
                     fontSize = 13.sp,
                     fontWeight = FontWeight.SemiBold,
                     color = Color.White.copy(alpha = 0.9f),

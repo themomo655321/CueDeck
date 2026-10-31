@@ -45,11 +45,6 @@ interface AudioEngine {
     fun setTrackVolume(playbackId: String, volume: Float, smoothingMs: Long = 150L)
 
     /**
-     * Enables or disables reverb/echo fade-out tail for a specific track.
-     */
-    fun setReverbTail(playbackId: String, enabled: Boolean) {}
-
-    /**
      * Updates master volume in real time for all active streams.
      */
     fun setMasterVolume(volume: Float)

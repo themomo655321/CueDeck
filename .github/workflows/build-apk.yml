@@ -52,42 +52,41 @@ jobs:
       - name: Prepare APK Asset
         run: |
             mkdir -p release_assets
-            cp androidApp/build/outputs/apk/debug/androidApp-debug.apk release_assets/CueDeck-v1.1.3-debug.apk
+            cp androidApp/build/outputs/apk/debug/androidApp-debug.apk release_assets/CueDeck-v1.1.4-debug.apk
 
       - name: Upload APK as Workflow Artifact
         uses: actions/upload-artifact@v4
         with:
           name: CueDeck-debug-apk
-          path: release_assets/CueDeck-v1.1.3-debug.apk
+          path: release_assets/CueDeck-v1.1.4-debug.apk
           retention-days: 14
 
       - name: Create or Update GitHub Release
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: v1.1.3
-          name: "CueDeck v1.1.3 Preview APK"
+          tag_name: v1.1.4
+          name: "CueDeck v1.1.4 Preview APK"
           make_latest: true
           body: |
-            ### 🎛️ CueDeck v1.1.3 - Stage Layout & Audio Response Overhaul
+            ### 🎛️ CueDeck v1.1.4 - Integer Cue Numbers, Multi-Gear FINE Faders & Clean Fader Strips
             Direct Android APK build for mobile & tablet live testing.
 
-            #### 🛠️ What's New in v1.1.3:
-            - **Zero-Latency Audio Faders**:
-              - Eliminated the 25ms smoothing coroutine cancellation choke on physical dragging — manual fader movements now write directly to audio hardware with **0ms instant response**.
-              - Decoupled touch gesture tracking from StateFlow re-emission, delivering buttery-smooth 60/120Hz fader movement with no visual or audio stutter.
-            - **Ultra-Compact Armed / Standby Stage Ribbon (~38dp)**:
-              - Replaced the bulky 115dp card with a sleek 1-row broadcast strip displaying `[STANDBY]`, bold Cue number, track name, duration, follow action, and stage edit button. Saves over 75dp of vertical space!
-            - **Compact "Now Playing" Drawer (Max 68dp)**:
-              - Re-engineered active playback rows into ultra-slim 26dp single lines with embedded micro progress bars and audio kill/fade buttons. Capped at 68dp max in landscape so it never squashes the screen.
-            - **Guaranteed Cue Stack Space**:
-              - Enforced `heightIn(min = 140.dp)` on the Cue Stack across all landscape and portrait layouts — the cue stack is **guaranteed to always show at least 3–4 full cue rows** regardless of how many cues are currently playing.
-            - **Fluid Draggable Splitter**:
-              - Fixed the delta accumulation bug so dragging between 20% and 80% screen width is immediate and continuous.
-              - Expanded touch hit area to 32dp for effortless thumb dragging on mobile screens.
-            - **Cleaned Up Unused Legacy Code**:
-              - Removed obsolete 257-line `CartGridSection` and legacy soundboard pad slots.
-              - Consolidated landscape console layouts into DRY, reusable components.
-              - Removed the unused high-contrast stage theme toggle from Settings.
-          files: release_assets/CueDeck-v1.1.3-debug.apk
+            #### 🛠️ What's New in v1.1.4:
+            - **Clean Integer Cue Numbers**:
+              - Stripped unwanted decimal formatting (`.0`). Cues now display as clean whole numbers (`1`, `2`, `3`...) across Cue Stack, Armed Banner, Cue Editor, and Go Button.
+              - Auto-sanitizes existing saved shows on load so legacy `.0` cues are automatically cleaned up.
+            - **Complete Removal of Reverb TAIL Feature**:
+              - Purged all legacy audio effects, reverb sessions, and decay loops from `AndroidAudioEngine` and `AudioEngine`.
+              - Expanded the **MUTE** button to the full width of each fader strip (22dp height) for rapid, error-free single-tap muting on stage.
+            - **Multi-Gear Precision [FINE] Mode (OFF -> 4X -> 8X -> 16X -> OFF)**:
+              - Replaced single toggle with a 4-state cycling precision mode:
+                - **OFF** (Dark Gray): Standard 1:1 hardware travel.
+                - **FINE 4X** (Cyan): 4x virtual travel and refined elastic chasing for gentle ride.
+                - **FINE 8X** (Amber): 8x virtual travel for precision balance adjustments.
+                - **FINE 16X** (Electric Magenta): 16x virtual travel with ultra-fine micro-chasing for surgical sub-decibel trimming.
+            - **Capped Now Playing Drawer & Guaranteed Cue Stack Visibility**:
+              - Compacted the "Now Playing" drawer to max 58dp in landscape with sleek 24dp rows.
+              - Prevents the Cue Stack from ever being squashed or pushed off-screen when 1, 2, 3, or more cues are actively playing simultaneously.
+          files: release_assets/CueDeck-v1.1.4-debug.apk
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
