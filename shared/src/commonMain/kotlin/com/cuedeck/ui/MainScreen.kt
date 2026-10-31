@@ -1,11 +1,13 @@
 package com.cuedeck.ui
 
-import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.fadeIn
-import androidx.compose.animation.fadeOut
+import androidx.compose.animation.*
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -14,6 +16,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.zIndex
 import com.cuedeck.diagnostics.ErrorLogger
 import com.cuedeck.model.*
 import com.cuedeck.ui.components.*
@@ -39,6 +42,10 @@ fun MainScreen(
     val storageInspection by viewModel.storageInspection.collectAsState()
     val importProgress by viewModel.importProgress.collectAsState()
     val importFileName by viewModel.importFileName.collectAsState()
+    val isImportMinimized by viewModel.isImportMinimized.collectAsState()
+    val autoCrossfadeEnabled by viewModel.autoCrossfadeEnabled.collectAsState()
+    val crossfadeDurationMs by viewModel.crossfadeDurationMs.collectAsState()
+    val savedShows by viewModel.savedShows.collectAsState()
     val userErrorMessage by viewModel.userErrorMessage.collectAsState()
     val errorLogs by ErrorLogger.logs.collectAsState()
 
@@ -48,6 +55,7 @@ fun MainScreen(
     var showSettingsModal by remember { mutableStateOf(false) }
     var showStorageModal by remember { mutableStateOf(false) }
     var showDiagnosticsModal by remember { mutableStateOf(false) }
+    var showShowManagerModal by remember { mutableStateOf(false) }
 
     val armedCue = show.findCue(show.armedCueId) ?: show.cues.firstOrNull()
 
@@ -61,7 +69,7 @@ fun MainScreen(
         val isWideScreen = maxWidth > 650.dp // Tablet or landscape orientation
 
         Column(modifier = Modifier.fillMaxSize()) {
-            // Persistent Top Safety Bar with Save button & Settings button
+            // Persistent Top Safety Bar with Show Switcher, Lock & Settings
             TopSafetyBar(
                 title = show.title,
                 viewMode = show.currentViewMode,
@@ -72,7 +80,10 @@ fun MainScreen(
                 onVolumeChange = { viewModel.setMasterVolume(it) },
                 onPanicStop = { viewModel.panicStop() },
                 onSaveShow = { viewModel.saveCurrentShow(userInitiated = true) },
-                saveFeedback = saveFeedback,
+                onOpenShowManager = {
+                    viewModel.refreshSavedShows()
+                    showShowManagerModal = true
+                },
                 onOpenSettings = { showSettingsModal = true }
             )
 
@@ -144,6 +155,7 @@ fun MainScreen(
                             onAddCueClick = { showImportChoiceDialog = true },
                             onMoveUp = { viewModel.moveCueUp(it) },
                             onMoveDown = { viewModel.moveCueDown(it) },
+                            onMoveCue = { from, to -> viewModel.moveCue(from, to) },
                             modifier = Modifier.weight(1f).fillMaxWidth()
                         )
 
@@ -201,6 +213,7 @@ fun MainScreen(
                                 onAddCueClick = { showImportChoiceDialog = true },
                                 onMoveUp = { viewModel.moveCueUp(it) },
                                 onMoveDown = { viewModel.moveCueDown(it) },
+                                onMoveCue = { from, to -> viewModel.moveCue(from, to) },
                                 modifier = Modifier.fillMaxSize()
                             )
                         }
@@ -229,12 +242,105 @@ fun MainScreen(
                 }
             }
         }
+
+        // Floating Non-blocking Toast Notification (Positioned below TopSafetyBar, never obstructs buttons)
+        AnimatedVisibility(
+            visible = saveFeedback != null,
+            enter = fadeIn() + slideInVertically(initialOffsetY = { -it }),
+            exit = fadeOut() + slideOutVertically(targetOffsetY = { -it }),
+            modifier = Modifier
+                .align(Alignment.TopCenter)
+                .padding(top = 56.dp)
+                .zIndex(100f)
+        ) {
+            Surface(
+                color = Color(0xFF1B5E20),
+                shape = RoundedCornerShape(20.dp),
+                shadowElevation = 8.dp,
+                modifier = Modifier.padding(horizontal = 16.dp)
+            ) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier.padding(horizontal = 14.dp, vertical = 7.dp)
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.CheckCircle,
+                        contentDescription = null,
+                        tint = Color(0xFF69F0AE),
+                        modifier = Modifier.size(16.dp)
+                    )
+                    Spacer(modifier = Modifier.width(6.dp))
+                    Text(
+                        text = saveFeedback ?: "",
+                        color = Color.White,
+                        fontSize = 12.sp,
+                        fontWeight = FontWeight.Bold
+                    )
+                }
+            }
+        }
+
+        // Minimized Floating Background Download Indicator
+        AnimatedVisibility(
+            visible = importProgress != null && isImportMinimized,
+            enter = fadeIn() + slideInVertically(initialOffsetY = { it }),
+            exit = fadeOut() + slideOutVertically(targetOffsetY = { it }),
+            modifier = Modifier
+                .align(Alignment.BottomCenter)
+                .padding(bottom = 74.dp)
+                .zIndex(90f)
+        ) {
+            Surface(
+                color = Color(0xFF1A2A38),
+                shape = RoundedCornerShape(24.dp),
+                shadowElevation = 10.dp,
+                modifier = Modifier
+                    .border(1.dp, Color(0xFF00E5FF), RoundedCornerShape(24.dp))
+                    .clickable { viewModel.expandImport() }
+            ) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier.padding(horizontal = 14.dp, vertical = 6.dp)
+                ) {
+                    val pct = ((importProgress ?: 0f) * 100).toInt()
+                    CircularProgressIndicator(
+                        progress = { (importProgress ?: 0f).coerceIn(0f, 1f) },
+                        modifier = Modifier.size(16.dp),
+                        color = Color(0xFF00E5FF),
+                        strokeWidth = 2.dp
+                    )
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text(
+                        text = "Downloading $pct%: ${(importFileName ?: "Audio").take(22)}",
+                        color = Color.White,
+                        fontSize = 11.sp,
+                        fontWeight = FontWeight.Medium
+                    )
+                    Spacer(modifier = Modifier.width(8.dp))
+                    IconButton(
+                        onClick = { viewModel.cancelImport() },
+                        modifier = Modifier.size(24.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Close,
+                            contentDescription = "Cancel",
+                            tint = Color.LightGray,
+                            modifier = Modifier.size(14.dp)
+                        )
+                    }
+                }
+            }
+        }
     }
 
     // Modal: Settings & Updates
     if (showSettingsModal) {
         SettingsModal(
             settings = settings,
+            autoCrossfadeEnabled = autoCrossfadeEnabled,
+            crossfadeDurationMs = crossfadeDurationMs,
+            onToggleAutoCrossfade = { viewModel.setAutoCrossfadeEnabled(it) },
+            onChangeCrossfadeDuration = { viewModel.setCrossfadeDuration(it) },
             onSaveSettings = { viewModel.updateSettings(it) },
             onOpenStorageInspector = {
                 viewModel.inspectCurrentStorage()
@@ -245,6 +351,21 @@ fun MainScreen(
             },
             onCheckForUpdates = onCheckForUpdates,
             onDismiss = { showSettingsModal = false }
+        )
+    }
+
+    // Modal: Show Files Manager
+    if (showShowManagerModal) {
+        ShowManagerModal(
+            currentShowId = show.id,
+            currentShowTitle = show.title,
+            savedShows = savedShows,
+            onCreateNewShow = { viewModel.createNewShow(it) },
+            onLoadShow = { viewModel.loadShowById(it) },
+            onSaveShowAs = { viewModel.saveShowAs(it) },
+            onRenameShow = { viewModel.renameCurrentShow(it) },
+            onDeleteShow = { viewModel.deleteShowById(it) },
+            onDismiss = { showShowManagerModal = false }
         )
     }
 
@@ -267,21 +388,32 @@ fun MainScreen(
         )
     }
 
-    // Dialog: Cloud / Drive Audio Download Progress Bar
-    if (importProgress != null) {
+    // Dialog: Cloud / Drive Audio Download Progress Bar (with Cancel and Background options)
+    if (importProgress != null && !isImportMinimized) {
         AlertDialog(
-            onDismissRequest = {},
-            title = { Text("Importing Audio File...") },
+            onDismissRequest = { viewModel.minimizeImport() },
+            title = {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Text("Downloading Audio File...", fontSize = 15.sp, fontWeight = FontWeight.Bold)
+                    IconButton(onClick = { viewModel.minimizeImport() }, modifier = Modifier.size(28.dp)) {
+                        Icon(Icons.Default.Minimize, contentDescription = "Minimize", tint = Color.Gray)
+                    }
+                }
+            },
             text = {
                 Column {
                     Text(
-                        text = importFileName ?: "Streaming file from Drive / storage...",
+                        text = importFileName ?: "Streaming file from source...",
                         fontSize = 12.sp,
                         color = Color.LightGray
                     )
                     Spacer(modifier = Modifier.height(12.dp))
                     val pct = ((importProgress ?: 0f) * 100).toInt()
-                    Text("Progress: $pct%", fontSize = 11.sp, color = Color(0xFF00E5FF))
+                    Text("Progress: $pct%", fontSize = 11.sp, color = Color(0xFF00E5FF), fontWeight = FontWeight.Bold)
                     Spacer(modifier = Modifier.height(6.dp))
                     LinearProgressIndicator(
                         progress = { (importProgress ?: 0f).coerceIn(0f, 1f) },
@@ -289,7 +421,16 @@ fun MainScreen(
                     )
                 }
             },
-            confirmButton = {}
+            confirmButton = {
+                TextButton(onClick = { viewModel.minimizeImport() }) {
+                    Text("Run in Background", fontWeight = FontWeight.Bold)
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { viewModel.cancelImport() }) {
+                    Text("Cancel Download", color = PanicRed)
+                }
+            }
         )
     }
 

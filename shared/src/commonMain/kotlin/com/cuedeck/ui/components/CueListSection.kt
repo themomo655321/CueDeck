@@ -3,23 +3,27 @@ package com.cuedeck.ui.components
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.detectDragGesturesAfterLongPress
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
-import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.zIndex
 import com.cuedeck.model.Cue
 import com.cuedeck.model.FollowAction
 import com.cuedeck.ui.theme.ArmedBlue
@@ -35,13 +39,16 @@ fun CueListSection(
     onAddCueClick: () -> Unit,
     onMoveUp: ((String) -> Unit)? = null,
     onMoveDown: ((String) -> Unit)? = null,
+    onMoveCue: ((fromIndex: Int, toIndex: Int) -> Unit)? = null,
     modifier: Modifier = Modifier
 ) {
     val listState = rememberLazyListState()
+    var draggingIndex by remember { mutableStateOf<Int?>(null) }
+    var dragAccumulatedY by remember { mutableStateOf(0f) }
 
     // Auto-scroll to armed cue whenever armedCueId changes so operator never loses track
     LaunchedEffect(armedCueId) {
-        if (armedCueId != null) {
+        if (armedCueId != null && draggingIndex == null) {
             val armedIndex = cues.indexOfFirst { it.id == armedCueId }
             if (armedIndex >= 0) {
                 listState.animateScrollToItem(armedIndex)
@@ -100,17 +107,64 @@ fun CueListSection(
                     .fillMaxWidth()
                     .weight(1f)
             ) {
-                items(cues, key = { it.id }) { cue ->
+                itemsIndexed(cues, key = { _, item -> item.id }) { index, cue ->
                     val isArmed = cue.id == armedCueId
-                    CueRow(
-                        cue = cue,
-                        isArmed = isArmed,
-                        isPerformanceLocked = isPerformanceLocked,
-                        onArm = { onArmCue(cue.id) },
-                        onEdit = { onEditCue(cue) },
-                        onMoveUp = onMoveUp?.let { { it(cue.id) } },
-                        onMoveDown = onMoveDown?.let { { it(cue.id) } }
-                    )
+                    val isDragging = draggingIndex == index
+
+                    Box(
+                        modifier = Modifier
+                            .zIndex(if (isDragging) 10f else 1f)
+                            .graphicsLayer {
+                                translationY = if (isDragging) dragAccumulatedY else 0f
+                                scaleX = if (isDragging) 1.02f else 1f
+                                scaleY = if (isDragging) 1.02f else 1f
+                            }
+                    ) {
+                        CueRow(
+                            cue = cue,
+                            isArmed = isArmed,
+                            isDragging = isDragging,
+                            isPerformanceLocked = isPerformanceLocked,
+                            onArm = { onArmCue(cue.id) },
+                            onEdit = { onEditCue(cue) },
+                            onMoveUp = onMoveUp?.let { { it(cue.id) } },
+                            onMoveDown = onMoveDown?.let { { it(cue.id) } },
+                            onDragGestureModifier = if (!isPerformanceLocked && onMoveCue != null) {
+                                Modifier.pointerInput(cues.size) {
+                                    detectDragGesturesAfterLongPress(
+                                        onDragStart = {
+                                            draggingIndex = index
+                                            dragAccumulatedY = 0f
+                                        },
+                                        onDragEnd = {
+                                            draggingIndex = null
+                                            dragAccumulatedY = 0f
+                                        },
+                                        onDragCancel = {
+                                            draggingIndex = null
+                                            dragAccumulatedY = 0f
+                                        },
+                                        onDrag = { change, dragAmount ->
+                                            change.consume()
+                                            dragAccumulatedY += dragAmount.y
+                                            val itemHeightPx = 110f // approx row height
+                                            val currentIdx = draggingIndex ?: return@detectDragGesturesAfterLongPress
+
+                                            if (dragAccumulatedY > itemHeightPx && currentIdx < cues.size - 1) {
+                                                onMoveCue(currentIdx, currentIdx + 1)
+                                                draggingIndex = currentIdx + 1
+                                                dragAccumulatedY -= itemHeightPx
+                                            } else if (dragAccumulatedY < -itemHeightPx && currentIdx > 0) {
+                                                onMoveCue(currentIdx, currentIdx - 1)
+                                                draggingIndex = currentIdx - 1
+                                                dragAccumulatedY += itemHeightPx
+                                            }
+                                        }
+                                    )
+                                }
+                            } else Modifier
+                        )
+                    }
                 }
             }
         }
@@ -121,25 +175,39 @@ fun CueListSection(
 private fun CueRow(
     cue: Cue,
     isArmed: Boolean,
+    isDragging: Boolean,
     isPerformanceLocked: Boolean,
     onArm: () -> Unit,
     onEdit: () -> Unit,
     onMoveUp: (() -> Unit)? = null,
-    onMoveDown: (() -> Unit)? = null
+    onMoveDown: (() -> Unit)? = null,
+    onDragGestureModifier: Modifier = Modifier
 ) {
     val sec = cue.effectiveDurationMs / 1000
     val durationText = "%d:%02d".format(sec / 60, sec % 60)
 
     Surface(
-        color = if (isArmed) Color(0xFF1B2B38) else DarkSurface,
+        color = when {
+            isDragging -> Color(0xFF223647)
+            isArmed -> Color(0xFF1B2B38)
+            else -> DarkSurface
+        },
         shape = RoundedCornerShape(8.dp),
         modifier = Modifier
             .fillMaxWidth()
+            .then(
+                if (isDragging) Modifier.shadow(8.dp, RoundedCornerShape(8.dp)) else Modifier
+            )
             .border(
-                width = if (isArmed) 1.5.dp else 1.dp,
-                color = if (isArmed) ArmedBlue else Color(0xFF2C2C2C),
+                width = if (isArmed || isDragging) 1.5.dp else 1.dp,
+                color = when {
+                    isDragging -> Color(0xFF00E5FF)
+                    isArmed -> ArmedBlue
+                    else -> Color(0xFF2C2C2C)
+                },
                 shape = RoundedCornerShape(8.dp)
             )
+            .then(onDragGestureModifier)
             .clickable { onArm() }
     ) {
         Row(
@@ -162,7 +230,7 @@ private fun CueRow(
                 text = cue.cueNumber,
                 fontSize = 14.sp,
                 fontWeight = FontWeight.Bold,
-                color = if (isArmed) ArmedBlue else Color.White,
+                color = if (isArmed || isDragging) ArmedBlue else Color.White,
                 modifier = Modifier.width(36.dp)
             )
 
@@ -210,7 +278,7 @@ private fun CueRow(
             )
 
             if (!isPerformanceLocked) {
-                // Reorder buttons
+                // Reorder buttons (quick one-tap fallback)
                 IconButton(
                     onClick = { onMoveUp?.invoke() },
                     modifier = Modifier.size(24.dp)
@@ -245,6 +313,16 @@ private fun CueRow(
                         modifier = Modifier.size(15.dp)
                     )
                 }
+
+                // Drag indicator handle
+                Icon(
+                    imageVector = Icons.Default.DragHandle,
+                    contentDescription = "Hold to drag",
+                    tint = if (isDragging) Color(0xFF00E5FF) else Color(0xFF555555),
+                    modifier = Modifier
+                        .size(18.dp)
+                        .padding(start = 2.dp)
+                )
             }
         }
     }

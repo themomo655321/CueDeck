@@ -164,4 +164,19 @@ class ShowRepository(private val platformStorage: PlatformStorage) {
     }
 
     fun listShows(): List<String> = platformStorage.listShowIds()
+
+    fun listShowSummaries(): List<ShowSummary> {
+        return platformStorage.listShowIds().mapNotNull { id ->
+            val show = loadShow(id) ?: return@mapNotNull null
+            ShowSummary(
+                id = show.id,
+                title = show.title.ifBlank { "Untitled Show" },
+                cueCount = show.cues.size
+            )
+        }
+    }
+
+    fun deleteShow(showId: String) {
+        platformStorage.deleteShow(showId)
+    }
 }

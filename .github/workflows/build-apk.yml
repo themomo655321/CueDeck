@@ -40,36 +40,44 @@ jobs:
       - name: Prepare APK Asset
         run: |
           mkdir -p release_assets
-          cp androidApp/build/outputs/apk/debug/androidApp-debug.apk release_assets/CueDeck-v1.0.6-debug.apk
+          cp androidApp/build/outputs/apk/debug/androidApp-debug.apk release_assets/CueDeck-v1.0.7-debug.apk
 
       - name: Upload APK as Workflow Artifact
         uses: actions/upload-artifact@v4
         with:
           name: CueDeck-debug-apk
-          path: release_assets/CueDeck-v1.0.6-debug.apk
+          path: release_assets/CueDeck-v1.0.7-debug.apk
           retention-days: 14
 
       - name: Create or Update GitHub Release
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: v1.0.6
-          name: "CueDeck v1.0.6 Preview APK"
+          tag_name: v1.0.7
+          name: "CueDeck v1.0.7 Preview APK"
           make_latest: true
           body: |
-            ### 🎛️ CueDeck v1.0.6 - Live Cue Trigger & Show Control
+            ### 🎛️ CueDeck v1.0.7 - Live Cue Trigger & Show Control
             Direct Android APK build for mobile & tablet testing (compatible with Android 11+ and ADVAN Sketsa 2).
 
-            #### 🛠️ What's New in v1.0.6:
-            - **Bulletproof YouTube & YouTube Music Stream Resolution**:
-              - Fixed HTTP 403 Forbidden error caused by YouTube IP-locking direct googlevideo audio streams.
-              - Implemented dynamic instance lookup and proxied stream extraction through active Invidious endpoints (`yt.chocolatemoo53.com`).
-              - Robust URL sanitizer handles `music.youtube.com`, `youtube.com/watch?v=...`, `youtu.be/...`, shorts, and embeds with query parameters (`&si=...`).
-            - **YouTube Playlist Batch Import**:
-              - Paste any YouTube or YouTube Music playlist link (`?list=...`) to sequentially download and queue tracks directly into the cue stack with combined progress tracking.
-            - **Freesound.org & Direct Link Imports**:
-              - Reliable extraction from Freesound.org sound pages and direct MP3/WAV/AAC/M4A/OGG URLs.
-            - **Precise Duration & Metadata Fallbacks**:
-              - Reads exact duration via Android `MediaMetadataRetriever` with upstream API fallback, ensuring accurate countdowns and waveform navigation.
-          files: release_assets/CueDeck-v1.0.6-debug.apk
+            #### 🛠️ What's New in v1.0.7:
+            - **Horizontal Waveform Length Zoom (Time-Axis Expansion)**:
+              - 1X (full track fit), 2X (200% width), and 4X (400% width) horizontal zoom with silky-smooth scrolling.
+              - In/Out markers, playhead, and waveform amplitude bars stretch across the zoomed time axis for micro-precision editing.
+            - **Non-Blocking Toast Pill**:
+              - Moved import/save notifications to an animated floating pill centered below the top bar with auto-dismiss.
+              - Completely prevents notifications from covering Settings, Master Volume, or Panic buttons.
+            - **Long-Press & Drag to Rearrange Cue Stack**:
+              - Touch & hold any cue to pick it up, drag it to any position in the cue stack, and drop it.
+              - Sequential numbering automatically updates and persists to storage.
+            - **Download Cancellation & Minimized Background Mode**:
+              - Cancel slow or unwanted web audio downloads at any time with `[ Cancel ]`.
+              - Tap `[ Run in Background ]` / `[ Minimize ]` to collapse the progress modal into an unobtrusive bottom indicator, allowing continued app usage during downloads.
+            - **Auto-Crossfade on GO**:
+              - Automatically fades out outgoing tracks when the next cue is triggered.
+              - Toggleable in Settings with configurable crossfade durations (0.5s to 3.0s, default 1.5s).
+            - **Multi-Show Project Manager (Save As & Load Show)**:
+              - Tap the show title in the top bar to open the Show Manager.
+              - Create new shows, save copies ("Save As..."), rename, delete, and switch between multiple saved shows on device.
+          files: release_assets/CueDeck-v1.0.7-debug.apk
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

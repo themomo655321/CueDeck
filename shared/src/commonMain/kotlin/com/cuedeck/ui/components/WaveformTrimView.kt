@@ -5,8 +5,13 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectDragGestures
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Flag
+import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -25,17 +30,16 @@ import kotlin.math.abs
 import kotlin.math.sin
 
 /**
- * Interactive Audio Waveform Editor for Non-Destructive Trimming.
- * Features 60fps smooth float handle dragging, debounced scrub audio,
- * 1x/2x/4x horizontal zoom multipliers, and real-time moving playhead.
+ * Real non-destructive audio waveform scrubber & in/out trimmer with length-zooming.
+ * Supports 1x (fit), 2x (double length), 4x (quad length) horizontal zoom with scrolling.
  */
 @Composable
 fun WaveformTrimView(
     cueId: String,
+    peaks: List<Float>,
+    totalDurationSec: Float,
     inPointSec: Float,
     outPointSec: Float,
-    totalDurationSec: Float,
-    peaks: List<Float> = emptyList(),
     previewProgressSec: Float? = null,
     onScrub: ((Float) -> Unit)? = null,
     onInPointChange: (Float) -> Unit,
@@ -43,8 +47,9 @@ fun WaveformTrimView(
     modifier: Modifier = Modifier
 ) {
     val duration = totalDurationSec.coerceAtLeast(0.5f)
-    var zoomLevel by remember { mutableStateOf(1) } // 1x, 2x, 4x zoom
+    var zoomLevel by remember { mutableStateOf(1) } // 1x, 2x, 4x length zoom
     var lastScrubTimestamp by remember { mutableStateOf(0L) }
+    val scrollState = rememberScrollState()
 
     // Fallback baseline peaks if real peaks are still extracting
     val fallbackPeaks = remember(cueId) {
@@ -57,6 +62,14 @@ fun WaveformTrimView(
     }
 
     val displayPeaks = if (peaks.isNotEmpty()) peaks else fallbackPeaks
+
+    // When zooming in, auto-scroll to the in-point
+    LaunchedEffect(zoomLevel) {
+        if (zoomLevel > 1) {
+            val targetScroll = ((inPointSec / duration) * scrollState.maxValue).toInt()
+            scrollState.animateScrollTo(targetScroll)
+        }
+    }
 
     Column(
         modifier = modifier
@@ -80,15 +93,24 @@ fun WaveformTrimView(
                 fontFamily = FontFamily.Monospace
             )
 
-            // Zoom pills (1x, 2x, 4x)
-            Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+            // Horizontal Length Zoom pills (1X, 2X, 4X)
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(4.dp)
+            ) {
+                Text(
+                    text = "LENGTH:",
+                    fontSize = 9.sp,
+                    color = Color.Gray,
+                    fontWeight = FontWeight.Bold
+                )
                 listOf(1 to "1X", 2 to "2X", 4 to "4X").forEach { (lvl, lbl) ->
                     Box(
                         modifier = Modifier
                             .clip(RoundedCornerShape(4.dp))
                             .background(if (zoomLevel == lvl) Color(0xFF00E5FF) else Color(0xFF242424))
                             .clickable { zoomLevel = lvl }
-                            .padding(horizontal = 5.dp, vertical = 1.dp)
+                            .padding(horizontal = 6.dp, vertical = 2.dp)
                     ) {
                         Text(
                             text = lbl,
@@ -111,7 +133,7 @@ fun WaveformTrimView(
 
         Spacer(modifier = Modifier.height(4.dp))
 
-        // Waveform & Draggable Handles Canvas
+        // Waveform & Draggable Handles Canvas (Horizontally Scrollable when Zoomed)
         BoxWithConstraints(
             modifier = Modifier
                 .fillMaxWidth()
@@ -119,165 +141,202 @@ fun WaveformTrimView(
                 .clip(RoundedCornerShape(6.dp))
                 .background(Color(0xFF0D0D0D))
         ) {
-            val parentMaxWidth = maxWidth
-            val widthPx = constraints.maxWidth.toFloat()
+            val viewportWidthDp = maxWidth
+            val totalWidthDp = viewportWidthDp * zoomLevel
+            val totalWidthPx = constraints.maxWidth.toFloat() * zoomLevel
 
             var activeDragHandle by remember { mutableStateOf<String?>(null) }
 
             Box(
                 modifier = Modifier
                     .fillMaxSize()
-                    .pointerInput(duration, inPointSec, outPointSec) {
-                        detectDragGestures(
-                            onDragStart = { offset ->
-                                val inX = (inPointSec / duration) * widthPx
-                                val outX = (outPointSec / duration) * widthPx
-                                val distIn = abs(offset.x - inX)
-                                val distOut = abs(offset.x - outX)
-
-                                activeDragHandle = if (distIn < distOut && distIn < 80f) {
-                                    "IN"
-                                } else if (distOut < 80f) {
-                                    "OUT"
-                                } else {
-                                    if (distIn < distOut) "IN" else "OUT"
-                                }
-                            },
-                            onDragEnd = { activeDragHandle = null },
-                            onDragCancel = { activeDragHandle = null },
-                            onDrag = { change, _ ->
-                                change.consume()
-                                val newSec = ((change.position.x / widthPx) * duration).coerceIn(0f, duration)
-                                val now = System.currentTimeMillis()
-
-                                if (activeDragHandle == "IN") {
-                                    val smoothIn = newSec.coerceAtMost((outPointSec - 0.05f).coerceAtLeast(0f))
-                                    onInPointChange(smoothIn)
-                                    if (now - lastScrubTimestamp > 60L) {
-                                        lastScrubTimestamp = now
-                                        onScrub?.invoke(smoothIn)
-                                    }
-                                } else if (activeDragHandle == "OUT") {
-                                    val smoothOut = newSec.coerceAtLeast((inPointSec + 0.05f).coerceAtMost(duration))
-                                    onOutPointChange(smoothOut)
-                                    if (now - lastScrubTimestamp > 60L) {
-                                        lastScrubTimestamp = now
-                                        onScrub?.invoke(smoothOut)
-                                    }
-                                }
-                            }
-                        )
-                    }
+                    .horizontalScroll(scrollState)
             ) {
-                Canvas(modifier = Modifier.fillMaxSize()) {
+                Box(
+                    modifier = Modifier
+                        .width(totalWidthDp)
+                        .fillMaxHeight()
+                        .pointerInput(duration, inPointSec, outPointSec, totalWidthPx) {
+                            detectDragGestures(
+                                onDragStart = { offset ->
+                                    val inX = (inPointSec / duration) * totalWidthPx
+                                    val outX = (outPointSec / duration) * totalWidthPx
+                                    val distIn = abs(offset.x - inX)
+                                    val distOut = abs(offset.x - outX)
+
+                                    activeDragHandle = if (distIn < distOut && distIn < 80f) {
+                                        "IN"
+                                    } else if (distOut < 80f) {
+                                        "OUT"
+                                    } else {
+                                        if (distIn < distOut) "IN" else "OUT"
+                                    }
+                                },
+                                onDragEnd = { activeDragHandle = null },
+                                onDragCancel = { activeDragHandle = null },
+                                onDrag = { change, _ ->
+                                    change.consume()
+                                    val newSec = ((change.position.x / totalWidthPx) * duration).coerceIn(0f, duration)
+                                    val now = System.currentTimeMillis()
+
+                                    if (activeDragHandle == "IN") {
+                                        val smoothIn = newSec.coerceAtMost((outPointSec - 0.05f).coerceAtLeast(0f))
+                                        onInPointChange(smoothIn)
+                                        if (now - lastScrubTimestamp > 60L) {
+                                            lastScrubTimestamp = now
+                                            onScrub?.invoke(smoothIn)
+                                        }
+                                    } else if (activeDragHandle == "OUT") {
+                                        val smoothOut = newSec.coerceAtLeast((inPointSec + 0.05f).coerceAtMost(duration))
+                                        onOutPointChange(smoothOut)
+                                        if (now - lastScrubTimestamp > 60L) {
+                                            lastScrubTimestamp = now
+                                            onScrub?.invoke(smoothOut)
+                                        }
+                                    }
+                                }
+                            )
+                        }
+                ) {
+                    Canvas(modifier = Modifier.fillMaxSize()) {
+                        val inFraction = (inPointSec / duration).coerceIn(0f, 1f)
+                        val outFraction = (outPointSec / duration).coerceIn(0f, 1f)
+                        val inX = inFraction * size.width
+                        val outX = outFraction * size.width
+
+                        // Dimmed trimmed-out regions
+                        if (inX > 0f) {
+                            drawRect(
+                                color = Color(0x66000000),
+                                topLeft = Offset.Zero,
+                                size = Size(inX, size.height)
+                            )
+                        }
+                        if (outX < size.width) {
+                            drawRect(
+                                color = Color(0x66000000),
+                                topLeft = Offset(outX, 0f),
+                                size = Size(size.width - outX, size.height)
+                            )
+                        }
+
+                        // Active highlighted region
+                        drawRect(
+                            color = Color(0x1A00E5FF),
+                            topLeft = Offset(inX, 0f),
+                            size = Size((outX - inX).coerceAtLeast(0f), size.height)
+                        )
+
+                        // Draw amplitude peak bars across expanded width
+                        val peakCount = displayPeaks.size
+                        val step = size.width / peakCount
+                        val midY = size.height / 2f
+                        displayPeaks.forEachIndexed { i, peak ->
+                            val barX = i * step + (step / 2f)
+                            val barHeight = peak.coerceIn(0.08f, 1.0f) * (size.height * 0.78f)
+                            val isInActive = barX in inX..outX
+                            val barColor = if (isInActive) Color(0xFF00E5FF) else Color(0xFF383838)
+
+                            drawLine(
+                                color = barColor,
+                                start = Offset(barX, midY - barHeight / 2f),
+                                end = Offset(barX, midY + barHeight / 2f),
+                                strokeWidth = (step * 0.65f).coerceIn(2f, 12f),
+                                cap = StrokeCap.Round
+                            )
+                        }
+
+                        // Draw IN Boundary Line (Green)
+                        drawLine(
+                            color = Color(0xFF00E676),
+                            start = Offset(inX, 0f),
+                            end = Offset(inX, size.height),
+                            strokeWidth = 3.dp.toPx()
+                        )
+
+                        // Draw OUT Boundary Line (Red)
+                        drawLine(
+                            color = Color(0xFFFF5252),
+                            start = Offset(outX, 0f),
+                            end = Offset(outX, size.height),
+                            strokeWidth = 3.dp.toPx()
+                        )
+
+                        // DJ Playhead line during preview
+                        previewProgressSec?.let { pSec ->
+                            val playheadFraction = (pSec / duration).coerceIn(0f, 1f)
+                            val playheadX = playheadFraction * size.width
+                            drawLine(
+                                color = Color.White,
+                                start = Offset(playheadX, 0f),
+                                end = Offset(playheadX, size.height),
+                                strokeWidth = 2.5.dp.toPx()
+                            )
+                            drawCircle(
+                                color = Color(0xFF00E5FF),
+                                radius = 4.dp.toPx(),
+                                center = Offset(playheadX, size.height / 2f)
+                            )
+                        }
+                    }
+
+                    // IN Handle Flag
                     val inFraction = (inPointSec / duration).coerceIn(0f, 1f)
+                    val inOffsetDp = ((totalWidthDp - 28.dp) * inFraction).coerceAtLeast(0.dp)
+                    Box(
+                        modifier = Modifier
+                            .offset(x = inOffsetDp)
+                            .align(Alignment.TopStart)
+                            .padding(top = 2.dp)
+                    ) {
+                        Surface(
+                            color = Color(0xFF00E676),
+                            shape = RoundedCornerShape(bottomEnd = 4.dp),
+                            modifier = Modifier.padding(2.dp)
+                        ) {
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                modifier = Modifier.padding(horizontal = 4.dp, vertical = 1.dp)
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.Flag,
+                                    contentDescription = "IN Point",
+                                    tint = Color.Black,
+                                    modifier = Modifier.size(10.dp)
+                                )
+                                Text("IN", color = Color.Black, fontSize = 9.sp, fontWeight = FontWeight.Black)
+                            }
+                        }
+                    }
+
+                    // OUT Handle Flag
                     val outFraction = (outPointSec / duration).coerceIn(0f, 1f)
-                    val inX = inFraction * size.width
-                    val outX = outFraction * size.width
-
-                    // Dimmed trimmed-out regions
-                    if (inX > 0f) {
-                        drawRect(
-                            color = Color(0x66000000),
-                            topLeft = Offset.Zero,
-                            size = Size(inX, size.height)
-                        )
+                    val outOffsetDp = ((totalWidthDp - 36.dp) * outFraction).coerceAtLeast(0.dp)
+                    Box(
+                        modifier = Modifier
+                            .offset(x = outOffsetDp)
+                            .align(Alignment.BottomStart)
+                            .padding(bottom = 2.dp)
+                    ) {
+                        Surface(
+                            color = Color(0xFFFF5252),
+                            shape = RoundedCornerShape(topEnd = 4.dp),
+                            modifier = Modifier.padding(2.dp)
+                        ) {
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                modifier = Modifier.padding(horizontal = 4.dp, vertical = 1.dp)
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.Flag,
+                                    contentDescription = "OUT Point",
+                                    tint = Color.White,
+                                    modifier = Modifier.size(10.dp)
+                                )
+                                Text("OUT", color = Color.White, fontSize = 9.sp, fontWeight = FontWeight.Black)
+                            }
+                        }
                     }
-                    if (outX < size.width) {
-                        drawRect(
-                            color = Color(0x66000000),
-                            topLeft = Offset(outX, 0f),
-                            size = Size(size.width - outX, size.height)
-                        )
-                    }
-
-                    // Active highlighted region
-                    drawRect(
-                        color = Color(0x1A00E5FF),
-                        topLeft = Offset(inX, 0f),
-                        size = Size((outX - inX).coerceAtLeast(0f), size.height)
-                    )
-
-                    // Draw amplitude peak bars with zoom multiplier
-                    val peakCount = displayPeaks.size
-                    val step = size.width / peakCount
-                    val midY = size.height / 2f
-                    displayPeaks.forEachIndexed { i, peak ->
-                        val barX = i * step + (step / 2f)
-                        val scaledPeak = (peak * (1f + (zoomLevel - 1) * 0.35f)).coerceIn(0.08f, 1.0f)
-                        val barHeight = scaledPeak * (size.height * 0.78f)
-                        val isInActive = barX in inX..outX
-                        val barColor = if (isInActive) Color(0xFF00E5FF) else Color(0xFF383838)
-
-                        drawLine(
-                            color = barColor,
-                            start = Offset(barX, midY - barHeight / 2f),
-                            end = Offset(barX, midY + barHeight / 2f),
-                            strokeWidth = (step * 0.65f).coerceAtLeast(2f),
-                            cap = StrokeCap.Round
-                        )
-                    }
-
-                    // Draw IN Boundary Line (Green)
-                    drawLine(
-                        color = Color(0xFF00E676),
-                        start = Offset(inX, 0f),
-                        end = Offset(inX, size.height),
-                        strokeWidth = 3.dp.toPx()
-                    )
-
-                    // Draw OUT Boundary Line (Red)
-                    drawLine(
-                        color = Color(0xFFFF5252),
-                        start = Offset(outX, 0f),
-                        end = Offset(outX, size.height),
-                        strokeWidth = 3.dp.toPx()
-                    )
-
-                    // DJ Playhead line during preview
-                    previewProgressSec?.let { pSec ->
-                        val playheadFraction = (pSec / duration).coerceIn(0f, 1f)
-                        val playheadX = playheadFraction * size.width
-                        drawLine(
-                            color = Color.White,
-                            start = Offset(playheadX, 0f),
-                            end = Offset(playheadX, size.height),
-                            strokeWidth = 2.5.dp.toPx()
-                        )
-                        drawCircle(
-                            color = Color(0xFF00E5FF),
-                            radius = 4.dp.toPx(),
-                            center = Offset(playheadX, size.height / 2f)
-                        )
-                    }
-                }
-
-                // IN Handle Flag
-                val inFraction = (inPointSec / duration).coerceIn(0f, 1f)
-                val inOffsetDp = ((parentMaxWidth - 28.dp) * inFraction).let { if (it < 0.dp) 0.dp else it }
-                Box(
-                    modifier = Modifier
-                        .offset(x = inOffsetDp)
-                        .align(Alignment.TopStart)
-                        .clip(RoundedCornerShape(bottomEnd = 4.dp))
-                        .background(Color(0xFF00E676))
-                        .padding(horizontal = 4.dp, vertical = 2.dp)
-                ) {
-                    Text("IN", fontSize = 9.sp, fontWeight = FontWeight.Black, color = Color.Black)
-                }
-
-                // OUT Handle Flag
-                val outFraction = (outPointSec / duration).coerceIn(0f, 1f)
-                val outOffsetDp = ((parentMaxWidth - 32.dp) * outFraction).let { if (it < 0.dp) 0.dp else it }
-                Box(
-                    modifier = Modifier
-                        .offset(x = outOffsetDp)
-                        .align(Alignment.BottomStart)
-                        .clip(RoundedCornerShape(topEnd = 4.dp))
-                        .background(Color(0xFFFF5252))
-                        .padding(horizontal = 4.dp, vertical = 2.dp)
-                ) {
-                    Text("OUT", fontSize = 9.sp, fontWeight = FontWeight.Black, color = Color.White)
                 }
             }
         }
@@ -285,10 +344,9 @@ fun WaveformTrimView(
 }
 
 private fun formatTime(sec: Float): String {
-    val totalSec = sec.coerceAtLeast(0f)
-    val mins = (totalSec / 60f).toInt()
-    val remSec = totalSec % 60f
-    val secs = remSec.toInt()
-    val millis = ((remSec - secs) * 100).toInt()
-    return "%d:%02d.%02d".format(mins, secs, millis)
+    val totalSeconds = sec.toInt()
+    val tenths = ((sec - totalSeconds) * 10).toInt()
+    val minutes = totalSeconds / 60
+    val seconds = totalSeconds % 60
+    return "%d:%02d.%d".format(minutes, seconds, tenths)
 }

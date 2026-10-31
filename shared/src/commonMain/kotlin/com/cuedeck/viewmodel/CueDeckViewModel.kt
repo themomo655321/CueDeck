@@ -6,6 +6,7 @@ import com.cuedeck.importer.PlatformWebAudioImporter
 import com.cuedeck.model.*
 import com.cuedeck.storage.SessionState
 import com.cuedeck.storage.ShowRepository
+import com.cuedeck.storage.ShowSummary
 import com.cuedeck.storage.StorageInspection
 import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.*
@@ -44,6 +45,7 @@ class CueDeckViewModel(
 
     private val _saveFeedback = MutableStateFlow<String?>(null)
     val saveFeedback: StateFlow<String?> = _saveFeedback.asStateFlow()
+    private var feedbackJob: Job? = null
 
     private val _storageInspection = MutableStateFlow<StorageInspection?>(null)
     val storageInspection: StateFlow<StorageInspection?> = _storageInspection.asStateFlow()
@@ -54,12 +56,26 @@ class CueDeckViewModel(
     private val _importFileName = MutableStateFlow<String?>(null)
     val importFileName: StateFlow<String?> = _importFileName.asStateFlow()
 
+    private val _isImportMinimized = MutableStateFlow(false)
+    val isImportMinimized: StateFlow<Boolean> = _isImportMinimized.asStateFlow()
+    private var importJob: Job? = null
+
+    private val _autoCrossfadeEnabled = MutableStateFlow(true)
+    val autoCrossfadeEnabled: StateFlow<Boolean> = _autoCrossfadeEnabled.asStateFlow()
+
+    private val _crossfadeDurationMs = MutableStateFlow(1500L)
+    val crossfadeDurationMs: StateFlow<Long> = _crossfadeDurationMs.asStateFlow()
+
+    private val _savedShows = MutableStateFlow<List<ShowSummary>>(emptyList())
+    val savedShows: StateFlow<List<ShowSummary>> = _savedShows.asStateFlow()
+
     private val _userErrorMessage = MutableStateFlow<String?>(null)
     val userErrorMessage: StateFlow<String?> = _userErrorMessage.asStateFlow()
 
     init {
         loadInitialShow()
         restoreSessionState()
+        refreshSavedShows()
 
         // Auto-follow event listener
         coroutineScope.launch {
@@ -203,6 +219,15 @@ class CueDeckViewModel(
             try {
                 if (armedCue.preWaitMs > 0) {
                     delay(armedCue.preWaitMs)
+                }
+
+                // If auto-crossfade is enabled, smoothly fade out any currently playing tracks
+                if (_autoCrossfadeEnabled.value) {
+                    val active = activePlaybacks.value
+                    val xFadeMs = _crossfadeDurationMs.value
+                    for (track in active) {
+                        audioEngine.stop(track.playbackId, xFadeMs)
+                    }
                 }
 
                 val playId = audioEngine.play(
@@ -418,10 +443,27 @@ class CueDeckViewModel(
         saveCurrentShow()
     }
 
+    fun moveCue(fromIndex: Int, toIndex: Int) {
+        _show.update { show ->
+            if (fromIndex !in show.cues.indices || toIndex !in show.cues.indices || fromIndex == toIndex) return@update show
+            val list = show.cues.toMutableList()
+            val item = list.removeAt(fromIndex)
+            list.add(toIndex, item)
+            // Renumber cues sequentially 1.0, 2.0, 3.0...
+            val renumbered = list.mapIndexed { idx, cue ->
+                cue.copy(cueNumber = "%.1f".format(idx + 1.0))
+            }
+            show.copy(cues = renumbered)
+        }
+        saveCurrentShow()
+    }
+
     fun importFromUrl(url: String) {
-        coroutineScope.launch {
+        importJob?.cancel()
+        _isImportMinimized.value = false
+        importJob = coroutineScope.launch {
             try {
-                _importFileName.value = "Web Audio"
+                _importFileName.value = "Connecting to source..."
                 _importProgress.value = 0.05f
 
                 val targetDir = repository.getBasePath(_show.value.id)
@@ -431,7 +473,7 @@ class CueDeckViewModel(
                     _importFileName.value = status
                 }
 
-                if (results.isNotEmpty()) {
+                if (isActive && results.isNotEmpty()) {
                     for (result in results) {
                         val nextNum = (_show.value.cues.size + 1).toDouble()
                         val newCue = Cue(
@@ -447,18 +489,120 @@ class CueDeckViewModel(
                         )
                         addCue(newCue)
                     }
-                    _saveFeedback.value = if (results.size == 1) "Imported: ${results[0].title} ✓" else "Imported ${results.size} cues ✓"
-                } else {
+                    showSaveFeedback(if (results.size == 1) "Imported: ${results[0].title} ✓" else "Imported ${results.size} cues ✓")
+                } else if (isActive) {
                     showUserError("Failed to import audio from link. Please check the URL.")
                 }
+            } catch (e: CancellationException) {
+                // User cancelled import
+                showSaveFeedback("Download cancelled")
             } catch (e: Exception) {
                 ErrorLogger.error("CueDeckViewModel", "Error importing web audio", e)
                 showUserError("Import error: ${e.message}")
             } finally {
                 _importProgress.value = null
                 _importFileName.value = null
+                _isImportMinimized.value = false
+                importJob = null
             }
         }
+    }
+
+    fun cancelImport() {
+        importJob?.cancel()
+        importJob = null
+        _importProgress.value = null
+        _importFileName.value = null
+        _isImportMinimized.value = false
+        showSaveFeedback("Download cancelled")
+    }
+
+    fun minimizeImport() {
+        _isImportMinimized.value = true
+    }
+
+    fun expandImport() {
+        _isImportMinimized.value = false
+    }
+
+    fun setAutoCrossfadeEnabled(enabled: Boolean) {
+        _autoCrossfadeEnabled.value = enabled
+    }
+
+    fun setCrossfadeDuration(ms: Long) {
+        _crossfadeDurationMs.value = ms
+    }
+
+    fun showSaveFeedback(message: String) {
+        feedbackJob?.cancel()
+        feedbackJob = coroutineScope.launch {
+            _saveFeedback.value = message
+            delay(3000L)
+            _saveFeedback.value = null
+        }
+    }
+
+    fun refreshSavedShows() {
+        _savedShows.value = repository.listShowSummaries()
+    }
+
+    fun createNewShow(title: String = "New Show") {
+        val newShow = Show(
+            id = UUID.randomUUID().toString(),
+            title = title,
+            cues = emptyList(),
+            cartBanks = listOf(defaultBank),
+            activeBankIndex = 0,
+            masterVolume = 1.0f,
+            armedCueId = null,
+            isPerformanceLocked = false,
+            currentViewMode = ViewMode.CUE_LIST
+        )
+        repository.saveShow(newShow)
+        _show.value = newShow
+        refreshSavedShows()
+        showSaveFeedback("Created: $title ✓")
+    }
+
+    fun loadShowById(showId: String) {
+        val loaded = repository.loadShow(showId)
+        if (loaded != null) {
+            audioEngine.stopAll(fadeOutMs = 0L)
+            _show.value = loaded
+            refreshSavedShows()
+            showSaveFeedback("Loaded: ${loaded.title} ✓")
+        } else {
+            showUserError("Failed to load show")
+        }
+    }
+
+    fun saveShowAs(newTitle: String) {
+        val newId = UUID.randomUUID().toString()
+        val copied = _show.value.copy(
+            id = newId,
+            title = newTitle
+        )
+        repository.saveShow(copied)
+        _show.value = copied
+        refreshSavedShows()
+        showSaveFeedback("Saved As: $newTitle ✓")
+    }
+
+    fun renameCurrentShow(newTitle: String) {
+        _show.update { it.copy(title = newTitle) }
+        saveCurrentShow()
+        refreshSavedShows()
+        showSaveFeedback("Renamed to: $newTitle ✓")
+    }
+
+    fun deleteShowById(showId: String) {
+        if (_show.value.id == showId) {
+            showUserError("Cannot delete currently open show")
+            return
+        }
+        repository.deleteShow(showId)
+        refreshSavedShows()
+        showSaveFeedback("Show deleted")
     }
 
     fun assignCueToCartSlot(bankIndex: Int, slotIndex: Int, cueId: String?) {
@@ -475,12 +619,9 @@ class CueDeckViewModel(
     fun saveCurrentShow(userInitiated: Boolean = false) {
         repository.saveShow(_show.value)
         saveSessionState()
+        refreshSavedShows()
         if (userInitiated) {
-            coroutineScope.launch {
-                _saveFeedback.value = "Show Saved ✓"
-                delay(2000)
-                _saveFeedback.value = null
-            }
+            showSaveFeedback("Show Saved ✓")
         }
     }
 
