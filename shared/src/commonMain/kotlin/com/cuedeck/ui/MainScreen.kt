@@ -37,6 +37,7 @@ fun MainScreen(
     val mixerSlots by viewModel.mixerSlots.collectAsState()
     val mixerQueue by viewModel.mixerQueue.collectAsState()
     val faderVolumes by viewModel.faderVolumes.collectAsState()
+    val faderTailEnabled by viewModel.faderTailEnabled.collectAsState()
     val settings by viewModel.settings.collectAsState()
     val cartPageIndex by viewModel.cartPageIndex.collectAsState()
     val saveFeedback by viewModel.saveFeedback.collectAsState()
@@ -135,8 +136,10 @@ fun MainScreen(
                             mixerSlots = mixerSlots,
                             queueCount = mixerQueue.size,
                             faderVolumes = faderVolumes,
+                            faderTailEnabled = faderTailEnabled,
                             fineModeEnabled = settings.fineModeEnabled,
                             onFineModeToggle = { viewModel.updateSettings(settings.copy(fineModeEnabled = it)) },
+                            onToggleFaderTail = { viewModel.toggleFaderTail(it) },
                             onFaderChange = { ch, vol -> viewModel.setFaderVolume(ch, vol) }
                         )
                     }
@@ -146,7 +149,10 @@ fun MainScreen(
                         verticalArrangement = Arrangement.spacedBy(6.dp),
                         modifier = Modifier.weight(1.3f).fillMaxHeight()
                     ) {
-                        ArmedCueCard(armedCue = armedCue)
+                        ArmedCueCard(
+                            armedCue = armedCue,
+                            onEditCue = { editingCue = it }
+                        )
 
                         CueListSection(
                             cues = show.cues,
@@ -201,7 +207,10 @@ fun MainScreen(
                                 .fillMaxHeight(),
                             verticalArrangement = Arrangement.spacedBy(6.dp)
                         ) {
-                            ArmedCueCard(armedCue = armedCue)
+                            ArmedCueCard(
+                                armedCue = armedCue,
+                                onEditCue = { editingCue = it }
+                            )
 
                             ActiveCuesDrawer(
                                 activePlaybacks = activePlaybacks,
@@ -245,8 +254,10 @@ fun MainScreen(
                         mixerSlots = mixerSlots,
                         queueCount = mixerQueue.size,
                         faderVolumes = faderVolumes,
+                        faderTailEnabled = faderTailEnabled,
                         fineModeEnabled = settings.fineModeEnabled,
                         onFineModeToggle = { viewModel.updateSettings(settings.copy(fineModeEnabled = it)) },
+                        onToggleFaderTail = { viewModel.toggleFaderTail(it) },
                         onFaderChange = { ch, vol -> viewModel.setFaderVolume(ch, vol) }
                     )
 

@@ -37,6 +37,9 @@ class CueDeckViewModel(
     private val _faderVolumes = MutableStateFlow(listOf(1.0f, 1.0f, 1.0f, 1.0f))
     val faderVolumes: StateFlow<List<Float>> = _faderVolumes.asStateFlow()
 
+    private val _faderTailEnabled = MutableStateFlow(listOf(false, false, false, false))
+    val faderTailEnabled: StateFlow<List<Boolean>> = _faderTailEnabled.asStateFlow()
+
     private val _activeTab = MutableStateFlow(0) // 0 = Cue Stack, 1 = Soundboard
     val activeTab: StateFlow<Int> = _activeTab.asStateFlow()
 
@@ -130,6 +133,8 @@ class CueDeckViewModel(
             if (emptySlotIndex != -1) {
                 currentSlots[emptySlotIndex] = newTrack
                 val faderVol = _faderVolumes.value.getOrElse(emptySlotIndex) { 1.0f }
+                val isTailOn = _faderTailEnabled.value.getOrElse(emptySlotIndex) { false }
+                audioEngine.setReverbTail(newTrack.playbackId, isTailOn)
                 audioEngine.setTrackVolume(newTrack.playbackId, faderVol, 0L)
             } else {
                 currentQueue.add(newTrack)
@@ -143,6 +148,8 @@ class CueDeckViewModel(
             if (freeIndex != -1) {
                 currentSlots[freeIndex] = nextTrack
                 val faderVol = _faderVolumes.value.getOrElse(freeIndex) { 1.0f }
+                val isTailOn = _faderTailEnabled.value.getOrElse(freeIndex) { false }
+                audioEngine.setReverbTail(nextTrack.playbackId, isTailOn)
                 audioEngine.setTrackVolume(nextTrack.playbackId, faderVol, 0L)
             }
         }
@@ -309,7 +316,23 @@ class CueDeckViewModel(
 
             val activeTrack = _mixerSlots.value.getOrNull(channelIndex)
             if (activeTrack != null) {
+                val isTailOn = _faderTailEnabled.value.getOrElse(channelIndex) { false }
+                audioEngine.setReverbTail(activeTrack.playbackId, isTailOn)
                 audioEngine.setTrackVolume(activeTrack.playbackId, clamped, _settings.value.faderSmoothingMs)
+            }
+        }
+    }
+
+    fun toggleFaderTail(channelIndex: Int) {
+        val list = _faderTailEnabled.value.toMutableList()
+        if (channelIndex in list.indices) {
+            val newState = !list[channelIndex]
+            list[channelIndex] = newState
+            _faderTailEnabled.value = list
+
+            val activeTrack = _mixerSlots.value.getOrNull(channelIndex)
+            if (activeTrack != null) {
+                audioEngine.setReverbTail(activeTrack.playbackId, newState)
             }
         }
     }
@@ -457,7 +480,7 @@ class CueDeckViewModel(
         if (cues.isEmpty()) return
         val currentArmedId = _show.value.armedCueId
         val currentIndex = cues.indexOfFirst { it.id == currentArmedId }
-        val prevIndex = if (currentIndex > 0) currentIndex - 1 else 0
+        val prevIndex = if (currentIndex > 0) currentIndex - 1 else cues.size - 1
         armCue(cues[prevIndex].id)
     }
 
@@ -466,7 +489,7 @@ class CueDeckViewModel(
         if (cues.isEmpty()) return
         val currentArmedId = _show.value.armedCueId
         val currentIndex = cues.indexOfFirst { it.id == currentArmedId }
-        val nextIndex = if (currentIndex in 0 until cues.size - 1) currentIndex + 1 else cues.size - 1
+        val nextIndex = if (currentIndex in 0 until cues.size - 1) currentIndex + 1 else 0
         armCue(cues[nextIndex].id)
     }
 

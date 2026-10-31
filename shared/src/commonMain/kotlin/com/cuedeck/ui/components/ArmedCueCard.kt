@@ -2,6 +2,7 @@ package com.cuedeck.ui.components
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.*
@@ -20,6 +21,7 @@ import com.cuedeck.ui.theme.DarkSurfaceVariant
 @Composable
 fun ArmedCueCard(
     armedCue: Cue?,
+    onEditCue: ((Cue) -> Unit)? = null,
     modifier: Modifier = Modifier
 ) {
     Surface(
@@ -28,6 +30,9 @@ fun ArmedCueCard(
         modifier = modifier
             .fillMaxWidth()
             .border(2.dp, if (armedCue != null) ArmedBlue else Color(0xFF444444), RoundedCornerShape(12.dp))
+            .clickable(enabled = armedCue != null) {
+                armedCue?.let { onEditCue?.invoke(it) }
+            }
     ) {
         Column(modifier = Modifier.padding(14.dp)) {
             Row(
@@ -35,20 +40,32 @@ fun ArmedCueCard(
                 horizontalArrangement = Arrangement.SpaceBetween,
                 modifier = Modifier.fillMaxWidth()
             ) {
-                // Standby pill badge
-                Box(
-                    modifier = Modifier
-                        .clip(RoundedCornerShape(4.dp))
-                        .background(if (armedCue != null) ArmedBlue else Color.Gray)
-                        .padding(horizontal = 8.dp, vertical = 2.dp)
-                ) {
-                    Text(
-                        text = if (armedCue != null) "ARMED / STANDBY" else "STANDBY EMPTY",
-                        fontSize = 11.sp,
-                        fontWeight = FontWeight.Black,
-                        color = Color.White,
-                        letterSpacing = 0.5.sp
-                    )
+                // Standby pill badge & Tap to Edit hint
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Box(
+                        modifier = Modifier
+                            .clip(RoundedCornerShape(4.dp))
+                            .background(if (armedCue != null) ArmedBlue else Color.Gray)
+                            .padding(horizontal = 8.dp, vertical = 2.dp)
+                    ) {
+                        Text(
+                            text = if (armedCue != null) "ARMED / STANDBY" else "STANDBY EMPTY",
+                            fontSize = 11.sp,
+                            fontWeight = FontWeight.Black,
+                            color = Color.White,
+                            letterSpacing = 0.5.sp
+                        )
+                    }
+
+                    if (armedCue != null) {
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Text(
+                            text = "Tap to edit ⚙",
+                            fontSize = 10.sp,
+                            color = Color(0xFF00E5FF),
+                            fontWeight = FontWeight.SemiBold
+                        )
+                    }
                 }
 
                 if (armedCue != null && armedCue.preWaitMs > 0) {

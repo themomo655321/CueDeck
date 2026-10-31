@@ -45,8 +45,10 @@ fun FaderBank(
     mixerSlots: List<ActivePlayback?>,
     queueCount: Int = 0,
     faderVolumes: List<Float>,
+    faderTailEnabled: List<Boolean> = listOf(false, false, false, false),
     fineModeEnabled: Boolean = false,
     onFineModeToggle: (Boolean) -> Unit = {},
+    onToggleFaderTail: (Int) -> Unit = {},
     onFaderChange: (channelIndex: Int, volume: Float) -> Unit,
     modifier: Modifier = Modifier
 ) {
@@ -127,6 +129,8 @@ fun FaderBank(
                         activePlayback = activeTrack,
                         volume = volume,
                         isFineMode = localFineMode,
+                        isTailEnabled = faderTailEnabled.getOrElse(ch) { false },
+                        onToggleTail = { onToggleFaderTail(ch) },
                         onVolumeChange = { onFaderChange(ch, it) },
                         modifier = Modifier.weight(1f)
                     )
@@ -142,6 +146,8 @@ private fun FaderChannelStrip(
     activePlayback: ActivePlayback?,
     volume: Float,
     isFineMode: Boolean,
+    isTailEnabled: Boolean,
+    onToggleTail: () -> Unit,
     onVolumeChange: (Float) -> Unit,
     modifier: Modifier = Modifier
 ) {
@@ -269,24 +275,55 @@ private fun FaderChannelStrip(
 
             Spacer(modifier = Modifier.height(4.dp))
 
-            // Quick Mute / Reset Button
-            Box(
-                contentAlignment = Alignment.Center,
+            // Bottom Controls: Quick Mute & Reverb Tail Toggle
+            Row(
+                horizontalArrangement = Arrangement.spacedBy(3.dp),
                 modifier = Modifier
                     .fillMaxWidth()
                     .height(20.dp)
-                    .clip(RoundedCornerShape(4.dp))
-                    .background(if (volume <= 0.001f) PanicRed else Color(0xFF282828))
-                    .clickable {
-                        if (volume > 0f) onVolumeChange(0f) else onVolumeChange(1.0f)
-                    }
             ) {
-                Text(
-                    text = if (volume <= 0.001f) "MUTED" else "MUTE",
-                    fontSize = 8.sp,
-                    fontWeight = FontWeight.Black,
-                    color = if (volume <= 0.001f) Color.White else Color.Gray
-                )
+                // Quick Mute / Reset Button
+                Box(
+                    contentAlignment = Alignment.Center,
+                    modifier = Modifier
+                        .weight(1.2f)
+                        .fillMaxHeight()
+                        .clip(RoundedCornerShape(4.dp))
+                        .background(if (volume <= 0.001f) PanicRed else Color(0xFF282828))
+                        .clickable {
+                            if (volume > 0f) onVolumeChange(0f) else onVolumeChange(1.0f)
+                        }
+                ) {
+                    Text(
+                        text = if (volume <= 0.001f) "MUTED" else "MUTE",
+                        fontSize = 8.sp,
+                        fontWeight = FontWeight.Black,
+                        color = if (volume <= 0.001f) Color.White else Color.Gray
+                    )
+                }
+
+                // Reverb Fadeout Tail Button
+                Box(
+                    contentAlignment = Alignment.Center,
+                    modifier = Modifier
+                        .weight(1.1f)
+                        .fillMaxHeight()
+                        .clip(RoundedCornerShape(4.dp))
+                        .background(if (isTailEnabled) Color(0xFF7B1FA2) else Color(0xFF222222))
+                        .border(
+                            width = 1.dp,
+                            color = if (isTailEnabled) Color(0xFFCE93D8) else Color(0xFF333333),
+                            shape = RoundedCornerShape(4.dp)
+                        )
+                        .clickable { onToggleTail() }
+                ) {
+                    Text(
+                        text = if (isTailEnabled) "✦ TAIL" else "TAIL",
+                        fontSize = 8.sp,
+                        fontWeight = FontWeight.Black,
+                        color = if (isTailEnabled) Color.White else Color(0xFF777777)
+                    )
+                }
             }
         }
     }
@@ -314,7 +351,8 @@ private fun TactileVerticalFader(
     val faderCapHeightPx = with(density) { faderCapHeight.toPx() }
 
     var currentDisplayVol by remember { mutableFloatStateOf(volume) }
-    var isScrubbingFine by remember { mutableStateOf(false) }
+    var currentSpeedMultiplier by remember { mutableFloatStateOf(1.0f) }
+    var isSidePulling by remember { mutableStateOf(false) }
 
     LaunchedEffect(volume) {
         currentDisplayVol = volume
@@ -361,7 +399,6 @@ private fun TactileVerticalFader(
                         }
 
                         // Start continuous tracking
-                        val startX = down.position.x
                         var lastY = down.position.y
                         val travelPx = (size.height.toFloat() - faderCapHeightPx).coerceAtLeast(1f)
 
@@ -369,7 +406,8 @@ private fun TactileVerticalFader(
                             val event = awaitPointerEvent()
                             val pointer = event.changes.firstOrNull { it.id == down.id } ?: break
                             if (!pointer.pressed) {
-                                isScrubbingFine = false
+                                isSidePulling = false
+                                currentSpeedMultiplier = 1.0f
                                 break
                             }
                             pointer.consume()
@@ -379,24 +417,29 @@ private fun TactileVerticalFader(
                             val deltaY = currentY - lastY
                             lastY = currentY
 
-                            // Option C: Horizontal distance slows down vertical speed
-                            val horizontalDistance = abs(currentX - startX)
-                            val horizontalDivisor = if (horizontalDistance > 20f) {
-                                (1.0f + (horizontalDistance / 15f)).coerceIn(1f, 8f)
+                            // Distance from fader groove center:
+                            // Dead center: usual 1.0x response.
+                            // Dragging to side: gear ratio decreases, fader movement becomes quicker!
+                            val faderCenterX = size.width / 2f
+                            val horizontalDistance = abs(currentX - faderCenterX)
+
+                            val speedMult = if (horizontalDistance > 25f) {
+                                (1.0f + ((horizontalDistance - 25f) / 25f)).coerceIn(1.0f, 4.5f)
                             } else {
                                 1.0f
                             }
+                            currentSpeedMultiplier = speedMult
+                            isSidePulling = horizontalDistance > 28f
 
-                            // Option A: [FINE] mode forces 4x precision gear ratio
-                            val divisor = if (isFineMode) 4.0f else horizontalDivisor
-                            isScrubbingFine = divisor >= 2.0f
+                            val effectiveMultiplier = if (isFineMode) (speedMult / 4.0f) else speedMult
 
-                            // Upward drag (negative deltaY) increases volume
-                            val deltaVol = -(deltaY / travelPx) * 1.25f / divisor
+                            // Upward drag (negative deltaY) increases volume, downward decreases
+                            val deltaVol = -(deltaY / travelPx) * 1.25f * effectiveMultiplier
                             currentDisplayVol = (currentDisplayVol + deltaVol).coerceIn(0f, 1.25f)
                             onVolumeChange((currentDisplayVol * 1000).roundToInt() / 1000f)
                         }
-                        isScrubbingFine = false
+                        isSidePulling = false
+                        currentSpeedMultiplier = 1.0f
                     }
                 }
         ) {
@@ -423,9 +466,9 @@ private fun TactileVerticalFader(
                     .background(if (abs(clampedVol - 1.0f) < 0.02f) Color(0xFF4CAF50) else Color(0xFF666666))
             )
 
-            // Floating "FINE" Badge when Option C scrub is active
+            // Floating Dynamic Speed Badge when pulled to the side
             AnimatedVisibility(
-                visible = isScrubbingFine,
+                visible = isSidePulling,
                 enter = fadeIn(),
                 exit = fadeOut(),
                 modifier = Modifier.align(Alignment.TopCenter)
@@ -436,7 +479,12 @@ private fun TactileVerticalFader(
                         .background(Color(0xFF00E5FF))
                         .padding(horizontal = 4.dp, vertical = 1.dp)
                 ) {
-                    Text("FINE", fontSize = 8.sp, fontWeight = FontWeight.Black, color = Color.Black)
+                    Text(
+                        text = "FAST %.1fX".format(currentSpeedMultiplier),
+                        fontSize = 8.sp,
+                        fontWeight = FontWeight.Black,
+                        color = Color.Black
+                    )
                 }
             }
 

@@ -40,47 +40,37 @@ jobs:
       - name: Prepare APK Asset
         run: |
           mkdir -p release_assets
-          cp androidApp/build/outputs/apk/debug/androidApp-debug.apk release_assets/CueDeck-v1.0.8-debug.apk
+          cp androidApp/build/outputs/apk/debug/androidApp-debug.apk release_assets/CueDeck-v1.0.9-debug.apk
 
       - name: Upload APK as Workflow Artifact
         uses: actions/upload-artifact@v4
         with:
           name: CueDeck-debug-apk
-          path: release_assets/CueDeck-v1.0.8-debug.apk
+          path: release_assets/CueDeck-v1.0.9-debug.apk
           retention-days: 14
 
       - name: Create or Update GitHub Release
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: v1.0.8
-          name: "CueDeck v1.0.8 Preview APK"
+          tag_name: v1.0.9
+          name: "CueDeck v1.0.9 Preview APK"
           make_latest: true
           body: |
-            ### 🎛️ CueDeck v1.0.8 - Live Cue Trigger & Show Control
+            ### 🎛️ CueDeck v1.0.9 - Live Cue Trigger & Show Control
             Direct Android APK build for mobile & tablet testing (compatible with Android 11+ and ADVAN Sketsa 2).
 
-            #### 🛠️ What's New in v1.0.8:
-            - **Per-Cue Crossfade Out Previous Track on GO**:
-              - Moved crossfade out of global settings and directly into Cue Edit modal.
-              - Each cue can independently toggle "Crossfade Out Previous Track on GO" with custom fade times (`0.5s`, `1.0s`, `1.5s`, `2.0s`, `3.0s`).
-              - Keeps cues that need layering/overlapping unaffected!
-            - **Cue Duplication Button `[ ⧉ ]` & Removed Pause Symbol**:
-              - Tap the new duplicate button on any cue row to duplicate the cue with audio file, trim points, and settings intact.
-              - Removed confusing pause icon from cue stack rows.
-            - **Tap Live Track Countdown to Toggle Duration View**:
-              - Tap the timer on any playing track in Now Playing to toggle between countdown remaining (`-1:24`) and total duration (`2:15`).
-            - **Physical Volume Keys as Cue Selector**:
-              - Hardware Volume UP selects the previous cue in the stack.
-              - Hardware Volume DOWN selects the next cue in the stack.
-            - **Hardware Haptics Vibration Fix**:
-              - Added `VIBRATE` permission and multi-API direct hardware vibrator fallback for tactile vibration feedback on GO, Panic, cue selection, and volume rocker stepping.
-            - **Waveform Gliding & Zoom Horizontal Scroll Fix**:
-              - Dedicated top (IN) and bottom (OUT) touch grips glide smoothly with 1:1 finger tracking.
-              - Waveform canvas no longer intercepts gestures, allowing natural horizontal panning and scrolling across 1X, 2X, and 4X zoomed waveforms.
-            - **Exact Numeric Timecode Typing in Cue Edit**:
-              - Type exact seconds (`12.50`) or minutes:seconds (`1:15.20`) directly in IN and OUT numeric fields.
-            - **Reliable Cue Reordering**:
-              - Attached drag reordering directly to the dedicated `[ ≡ ]` handle, eliminating misclicks or accidental dragging when selecting unselected cues.
-          files: release_assets/CueDeck-v1.0.8-debug.apk
+            #### 🛠️ What's New in v1.0.9:
+            - **Click Standby / Armed Card to Open Cue Edit**:
+              - Tap anywhere on the Armed / Standby card on the top left to instantly open the selected cue's settings modal.
+            - **Volume Rocker Wrap Around**:
+              - Volume UP from the top of the cue stack wraps directly to the last cue at the bottom.
+              - Volume DOWN from the bottom wraps directly to the top cue.
+            - **Dynamic Fader Gear Ratio (Side-Pull Sensitivity)**:
+              - When holding and pulling a vertical fader, dead center gives standard 1:1 fader response.
+              - Dragging your finger to the side adjusts the gear ratio: the further away from center, the faster the fader sweeps (up to 4.5X speed) with a floating `FAST %.1fX` visual indicator.
+            - **Reverb / Echo Fade-Out Tail**:
+              - Added a compact `[✦ TAIL]` toggle button on each of the 4 mixer faders.
+              - When active, reverb wetness automatically increases as volume drops near 3% down to 0%, leaving a lush 1.8-second decay tail instead of an abrupt hard cut for smooth stage transitions.
+          files: release_assets/CueDeck-v1.0.9-debug.apk
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
