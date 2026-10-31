@@ -39,11 +39,11 @@ import kotlin.math.roundToInt
 import kotlin.math.sign
 
 /**
- * 4-Channel Live Audio Fader Console with Triple Fine-Tuning:
- * 1. [FINE] Mode Gear-Ratio Toggle (Option A)
- * 2. [+] and [−] Nudge Stepper Buttons (Option B)
- * 3. Horizontal-to-Fine Dynamic Scrubbing (Option C)
- * 4. Double-Tap Reset to 100% (Unity gain)
+ * 4-Channel Live Audio Fader Console with Stage Precision:
+ * 1. [FINE] Elastic Throttle Chasing Mode
+ * 2. [+] and [−] Nudge Stepper Buttons (1% micro steps)
+ * 3. Double-Tap Reset to 100% (0.0 dB unity gain)
+ * 4. Zero-latency instant audio response on physical drag
  */
 @Composable
 fun FaderBank(
@@ -365,7 +365,9 @@ private fun TactileVerticalFader(
     var isHolding by remember { mutableStateOf(false) }
 
     LaunchedEffect(volume) {
-        currentDisplayVol = volume
+        if (!isDragging && !isHolding) {
+            currentDisplayVol = volume
+        }
     }
 
     // Option A: Elastic Throttle Chasing Fader Loop in FINE mode

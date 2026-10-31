@@ -37,7 +37,6 @@ fun SettingsModal(
     var volumeButtonsTriggerGo by remember { mutableStateOf(settings.volumeButtonsTriggerGo) }
     var keepScreenAwake by remember { mutableStateOf(settings.keepScreenAwake) }
     var hapticFeedbackEnabled by remember { mutableStateOf(settings.hapticFeedbackEnabled) }
-    var isHighContrastStageTheme by remember { mutableStateOf(settings.isHighContrastStageTheme) }
     var panicFadeMs by remember { mutableStateOf(settings.panicFadeMs) }
 
     ModalBottomSheet(
@@ -149,31 +148,6 @@ fun SettingsModal(
                 )
             }
 
-            // High-Contrast Red Night-Vision Stage Theme Toggle
-            Row(
-                modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.SpaceBetween
-            ) {
-                Column(modifier = Modifier.weight(1f)) {
-                    Text(
-                        text = "Night-Vision Booth Theme",
-                        fontSize = 14.sp,
-                        fontWeight = FontWeight.Bold,
-                        color = Color.White
-                    )
-                    Text(
-                        text = "Red & black high-contrast palette for dark lighting booths.",
-                        fontSize = 11.sp,
-                        color = Color.Gray
-                    )
-                }
-                Switch(
-                    checked = isHighContrastStageTheme,
-                    onCheckedChange = { isHighContrastStageTheme = it }
-                )
-            }
-
             Divider(color = Color(0xFF2C2C2C), modifier = Modifier.padding(vertical = 10.dp))
 
             // Section: Fader Fine-Tuning Gear Ratio
@@ -276,7 +250,7 @@ fun SettingsModal(
                         color = Color.White
                     )
                     Text(
-                        text = "Installed: v1.1.2",
+                        text = "Installed: v1.1.3",
                         fontSize = 12.sp,
                         color = Color.Gray
                     )
@@ -308,7 +282,6 @@ fun SettingsModal(
                             volumeButtonsTriggerGo = volumeButtonsTriggerGo,
                             keepScreenAwake = keepScreenAwake,
                             hapticFeedbackEnabled = hapticFeedbackEnabled,
-                            isHighContrastStageTheme = isHighContrastStageTheme,
                             panicFadeMs = panicFadeMs
                         )
                     )

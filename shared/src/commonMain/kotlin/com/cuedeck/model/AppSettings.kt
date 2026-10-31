@@ -9,7 +9,6 @@ data class AppSettings(
     val volumeButtonsTriggerGo: Boolean = false, // When ON: Vol UP = GO, Vol DOWN = Panic
     val keepScreenAwake: Boolean = true, // FLAG_KEEP_SCREEN_ON during shows
     val hapticFeedbackEnabled: Boolean = true, // Tactile click on GO/Panic/Triggers
-    val isHighContrastStageTheme: Boolean = false, // Night-vision red booth stage theme
     val panicFadeMs: Long = 0L,
     val faderSmoothingMs: Long = 100L
 )

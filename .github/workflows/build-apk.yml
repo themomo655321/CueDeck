@@ -51,45 +51,43 @@ jobs:
 
       - name: Prepare APK Asset
         run: |
-          mkdir -p release_assets
-          cp androidApp/build/outputs/apk/debug/androidApp-debug.apk release_assets/CueDeck-v1.1.2-debug.apk
+            mkdir -p release_assets
+            cp androidApp/build/outputs/apk/debug/androidApp-debug.apk release_assets/CueDeck-v1.1.3-debug.apk
 
       - name: Upload APK as Workflow Artifact
         uses: actions/upload-artifact@v4
         with:
           name: CueDeck-debug-apk
-          path: release_assets/CueDeck-v1.1.2-debug.apk
+          path: release_assets/CueDeck-v1.1.3-debug.apk
           retention-days: 14
 
       - name: Create or Update GitHub Release
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: v1.1.2
-          name: "CueDeck v1.1.2 Preview APK"
+          tag_name: v1.1.3
+          name: "CueDeck v1.1.3 Preview APK"
           make_latest: true
           body: |
-            ### 🎛️ CueDeck v1.1.2 - Live Cue Trigger & Show Control
-            Direct Android APK build for mobile & tablet testing (compatible with Android 11+ and ADVAN Sketsa 2).
+            ### 🎛️ CueDeck v1.1.3 - Stage Layout & Audio Response Overhaul
+            Direct Android APK build for mobile & tablet live testing.
 
-            #### 🛠️ What's New in v1.1.2:
-            - **Option A: Elastic Throttle Chasing Faders (FINE Mode)**:
-              - When `FINE` mode is active, touching or holding anywhere on the fader track sets the target volume, and the fader smoothly glides towards your held finger at the gear-ratio speed.
-              - **Elastic Speed**: Micro-crawls at ~5%/sec (0.05 dB increments) when your finger is close, and accelerates up to ~28%/sec when held far ahead.
-              - Neon cyan target indicator dot shows where the fader is pursuing. Releasing locks volume immediately.
-              - Double-tap instantly snaps to unity gain (100% / 0.0 dB).
-            - **Resizable Workspace with Tactile Splitters**:
-              - **Horizontal Splitter**: Draggable 3-dot grip bar between columns to smoothly allocate screen width (20% to 80%).
-              - **Vertical Splitter**: Draggable bar to resize mixer fader height on the fly (120dp to 350dp).
-              - All panels and faders flex dynamically to fit the allocated area.
-            - **Stage Workspace Layout Manager (`[ ⊞ ]` in Top Bar)**:
-              - Select factory presets and save/load custom layouts.
-              - **Protected Default Layouts**: Factory defaults are marked `🔒 READ-ONLY` and cannot be overwritten or deleted!
-              - **Full Dual-Orientation Profiles**: Landscape and Portrait orientations independently remember their own layout and split ratios.
-              - **Factory Presets Included**:
-                - Landscape: *Studio Console* (Default), *Cue Master* (Reversed), *Broadcast Deck* (Mixer Bottom).
-                - Portrait: *Classic Theatre* (Default), *Split Screen Mobile*.
-              - **Save Layout As...**: Save custom splitters and panel arrangements under custom show names.
-              - **Reset to Default**: 1-tap restore to factory defaults at any time.
-          files: release_assets/CueDeck-v1.1.2-debug.apk
+            #### 🛠️ What's New in v1.1.3:
+            - **Zero-Latency Audio Faders**:
+              - Eliminated the 25ms smoothing coroutine cancellation choke on physical dragging — manual fader movements now write directly to audio hardware with **0ms instant response**.
+              - Decoupled touch gesture tracking from StateFlow re-emission, delivering buttery-smooth 60/120Hz fader movement with no visual or audio stutter.
+            - **Ultra-Compact Armed / Standby Stage Ribbon (~38dp)**:
+              - Replaced the bulky 115dp card with a sleek 1-row broadcast strip displaying `[STANDBY]`, bold Cue number, track name, duration, follow action, and stage edit button. Saves over 75dp of vertical space!
+            - **Compact "Now Playing" Drawer (Max 68dp)**:
+              - Re-engineered active playback rows into ultra-slim 26dp single lines with embedded micro progress bars and audio kill/fade buttons. Capped at 68dp max in landscape so it never squashes the screen.
+            - **Guaranteed Cue Stack Space**:
+              - Enforced `heightIn(min = 140.dp)` on the Cue Stack across all landscape and portrait layouts — the cue stack is **guaranteed to always show at least 3–4 full cue rows** regardless of how many cues are currently playing.
+            - **Fluid Draggable Splitter**:
+              - Fixed the delta accumulation bug so dragging between 20% and 80% screen width is immediate and continuous.
+              - Expanded touch hit area to 32dp for effortless thumb dragging on mobile screens.
+            - **Cleaned Up Unused Legacy Code**:
+              - Removed obsolete 257-line `CartGridSection` and legacy soundboard pad slots.
+              - Consolidated landscape console layouts into DRY, reusable components.
+              - Removed the unused high-contrast stage theme toggle from Settings.
+          files: release_assets/CueDeck-v1.1.3-debug.apk
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

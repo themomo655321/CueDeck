@@ -18,7 +18,6 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.cuedeck.model.ViewMode
 import com.cuedeck.ui.theme.DarkSurface
 import com.cuedeck.ui.theme.PanicRed
 import com.cuedeck.ui.theme.WarningAmber
@@ -26,10 +25,8 @@ import com.cuedeck.ui.theme.WarningAmber
 @Composable
 fun TopSafetyBar(
     title: String,
-    viewMode: ViewMode,
     isPerformanceLocked: Boolean,
     masterVolume: Float,
-    onViewModeChange: (ViewMode) -> Unit,
     onToggleLock: () -> Unit,
     onVolumeChange: (Float) -> Unit,
     onPanicStop: () -> Unit,

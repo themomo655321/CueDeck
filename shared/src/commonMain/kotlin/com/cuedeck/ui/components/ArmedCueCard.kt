@@ -1,7 +1,7 @@
 package com.cuedeck.ui.components
 
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
-import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -12,12 +12,16 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.cuedeck.model.Cue
 import com.cuedeck.ui.theme.ArmedBlue
-import com.cuedeck.ui.theme.DarkSurfaceVariant
 
+/**
+ * Ultra-compact 1-row broadcast stage ribbon for Armed / Standby cue (~38dp height).
+ * Saves vertical screen estate so the sequential Cue Stack is never pushed off screen.
+ */
 @Composable
 fun ArmedCueCard(
     armedCue: Cue?,
@@ -25,110 +29,133 @@ fun ArmedCueCard(
     modifier: Modifier = Modifier
 ) {
     Surface(
-        color = DarkSurfaceVariant,
-        shape = RoundedCornerShape(12.dp),
+        color = Color(0xFF161B22),
+        shape = RoundedCornerShape(8.dp),
+        border = BorderStroke(
+            width = 1.5.dp,
+            color = if (armedCue != null) ArmedBlue else Color(0xFF333333)
+        ),
         modifier = modifier
             .fillMaxWidth()
-            .border(2.dp, if (armedCue != null) ArmedBlue else Color(0xFF444444), RoundedCornerShape(12.dp))
             .clickable(enabled = armedCue != null) {
                 armedCue?.let { onEditCue?.invoke(it) }
             }
     ) {
-        Column(modifier = Modifier.padding(14.dp)) {
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.SpaceBetween,
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 8.dp, vertical = 6.dp)
+        ) {
+            // Left side: [STANDBY] badge + Cue number + Title
             Row(
                 verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.SpaceBetween,
-                modifier = Modifier.fillMaxWidth()
+                modifier = Modifier
+                    .weight(1f)
+                    .padding(end = 6.dp)
             ) {
-                // Standby pill badge & Tap to Edit hint
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Box(
-                        modifier = Modifier
-                            .clip(RoundedCornerShape(4.dp))
-                            .background(if (armedCue != null) ArmedBlue else Color.Gray)
-                            .padding(horizontal = 8.dp, vertical = 2.dp)
-                    ) {
-                        Text(
-                            text = if (armedCue != null) "ARMED / STANDBY" else "STANDBY EMPTY",
-                            fontSize = 11.sp,
-                            fontWeight = FontWeight.Black,
-                            color = Color.White,
-                            letterSpacing = 0.5.sp
-                        )
-                    }
-
-                    if (armedCue != null) {
-                        Spacer(modifier = Modifier.width(6.dp))
-                        Text(
-                            text = "Tap to edit ⚙",
-                            fontSize = 10.sp,
-                            color = Color(0xFF00E5FF),
-                            fontWeight = FontWeight.SemiBold
-                        )
-                    }
+                // Standby pill badge
+                Box(
+                    modifier = Modifier
+                        .clip(RoundedCornerShape(4.dp))
+                        .background(if (armedCue != null) ArmedBlue else Color(0xFF3A3A3A))
+                        .padding(horizontal = 6.dp, vertical = 2.dp)
+                ) {
+                    Text(
+                        text = if (armedCue != null) "STANDBY" else "EMPTY",
+                        fontSize = 10.sp,
+                        fontWeight = FontWeight.Black,
+                        color = Color.White,
+                        letterSpacing = 0.5.sp
+                    )
                 }
 
-                if (armedCue != null && armedCue.preWaitMs > 0) {
+                Spacer(modifier = Modifier.width(6.dp))
+
+                if (armedCue != null) {
                     Text(
-                        text = "Pre-wait: ${(armedCue.preWaitMs / 1000f)}s",
+                        text = armedCue.cueNumber,
+                        fontSize = 13.sp,
+                        fontWeight = FontWeight.Black,
+                        color = Color(0xFF00E5FF)
+                    )
+
+                    Spacer(modifier = Modifier.width(6.dp))
+
+                    Text(
+                        text = armedCue.name,
+                        fontSize = 13.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = Color.White,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.weight(1f, fill = false)
+                    )
+
+                    if (armedCue.preWaitMs > 0) {
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Text(
+                            text = "+${armedCue.preWaitMs / 1000f}s",
+                            fontSize = 10.sp,
+                            color = Color(0xFFFFB300),
+                            fontWeight = FontWeight.Bold
+                        )
+                    }
+                } else {
+                    Text(
+                        text = "End of Show (No cue armed)",
                         fontSize = 12.sp,
-                        color = Color(0xFFFFB300),
-                        fontWeight = FontWeight.Medium
+                        color = Color.Gray
                     )
                 }
             }
 
-            Spacer(modifier = Modifier.height(8.dp))
-
+            // Right side: Duration, Follow action badge, and Edit button
             if (armedCue != null) {
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
-                    modifier = Modifier.fillMaxWidth()
-                ) {
-                    Text(
-                        text = "Cue ${armedCue.cueNumber}",
-                        fontSize = 20.sp,
-                        fontWeight = FontWeight.Black,
-                        color = Color.White
-                    )
-                    Spacer(modifier = Modifier.width(12.dp))
-                    Text(
-                        text = armedCue.name,
-                        fontSize = 18.sp,
-                        fontWeight = FontWeight.SemiBold,
-                        color = Color.White,
-                        maxLines = 1
-                    )
-                }
-
-                Spacer(modifier = Modifier.height(4.dp))
-
-                Row(
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    modifier = Modifier.fillMaxWidth()
+                    horizontalArrangement = Arrangement.spacedBy(6.dp)
                 ) {
                     val sec = armedCue.effectiveDurationMs / 1000
                     val min = sec / 60
                     val remSec = sec % 60
                     Text(
-                        text = "Duration: %d:%02d".format(min, remSec),
-                        fontSize = 13.sp,
+                        text = "%d:%02d".format(min, remSec),
+                        fontSize = 11.sp,
+                        fontWeight = FontWeight.SemiBold,
                         color = Color(0xFFAAAAAA)
                     )
 
-                    Text(
-                        text = "Follow: ${armedCue.followAction.name.replace("_", " ")}",
-                        fontSize = 12.sp,
-                        color = Color(0xFFAAAAAA)
-                    )
+                    Box(
+                        modifier = Modifier
+                            .clip(RoundedCornerShape(3.dp))
+                            .background(Color(0xFF262626))
+                            .padding(horizontal = 5.dp, vertical = 2.dp)
+                    ) {
+                        Text(
+                            text = armedCue.followAction.name.replace("_", " "),
+                            fontSize = 9.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = Color(0xFFBBBBBB)
+                        )
+                    }
+
+                    Box(
+                        contentAlignment = Alignment.Center,
+                        modifier = Modifier
+                            .size(24.dp)
+                            .clip(RoundedCornerShape(4.dp))
+                            .background(Color(0xFF222834))
+                            .clickable { onEditCue?.invoke(armedCue) }
+                    ) {
+                        Text(
+                            text = "⚙",
+                            fontSize = 12.sp,
+                            color = Color(0xFF00E5FF)
+                        )
+                    }
                 }
-            } else {
-                Text(
-                    text = "End of Show or No Cues in Project",
-                    fontSize = 15.sp,
-                    color = Color.Gray,
-                    modifier = Modifier.padding(vertical = 6.dp)
-                )
             }
         }
     }
