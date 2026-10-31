@@ -19,7 +19,6 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.compose.ui.window.Dialog
 import com.cuedeck.model.*
 import com.cuedeck.ui.theme.DarkSurface
 import com.cuedeck.ui.theme.PanicRed
@@ -40,57 +39,49 @@ fun LayoutManagerModal(
     val customLayouts = layoutState.customLayouts.filter { it.isLandscape == selectedOrientationIsLandscape }
     val activeId = if (selectedOrientationIsLandscape) layoutState.activeLandscapeId else layoutState.activePortraitId
 
-    Dialog(onDismissRequest = onDismiss) {
-        Surface(
-            shape = RoundedCornerShape(16.dp),
-            color = DarkSurface,
-            tonalElevation = 8.dp,
-            modifier = Modifier
-                .fillMaxWidth(0.96f)
-                .fillMaxHeight(0.88f)
-                .border(1.dp, Color(0xFF333333), RoundedCornerShape(16.dp))
-        ) {
-            Column(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .padding(16.dp)
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        containerColor = DarkSurface,
+        title = {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween,
+                modifier = Modifier.fillMaxWidth()
             ) {
-                // Top Header
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    modifier = Modifier.fillMaxWidth()
-                ) {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Icon(
-                            imageVector = Icons.Default.Dashboard,
-                            contentDescription = null,
-                            tint = Color(0xFF00E5FF),
-                            modifier = Modifier.size(22.dp)
-                        )
-                        Spacer(modifier = Modifier.width(8.dp))
-                        Text(
-                            text = "WORKSPACE LAYOUTS",
-                            fontSize = 17.sp,
-                            fontWeight = FontWeight.Bold,
-                            color = Color.White
-                        )
-                    }
-
-                    IconButton(
-                        onClick = onDismiss,
-                        modifier = Modifier.size(32.dp)
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.Close,
-                            contentDescription = "Close",
-                            tint = Color.Gray
-                        )
-                    }
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Icon(
+                        imageVector = Icons.Default.Dashboard,
+                        contentDescription = null,
+                        tint = Color(0xFF00E5FF),
+                        modifier = Modifier.size(22.dp)
+                    )
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text(
+                        text = "WORKSPACE LAYOUTS",
+                        fontSize = 17.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = Color.White
+                    )
                 }
 
-                Spacer(modifier = Modifier.height(10.dp))
-
+                IconButton(
+                    onClick = onDismiss,
+                    modifier = Modifier.size(32.dp)
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Close,
+                        contentDescription = "Close",
+                        tint = Color.Gray
+                    )
+                }
+            }
+        },
+        text = {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .heightIn(max = 480.dp)
+            ) {
                 // Orientation Selector Tabs
                 Row(
                     modifier = Modifier
@@ -110,7 +101,7 @@ fun LayoutManagerModal(
                             .clickable { selectedOrientationIsLandscape = true }
                     ) {
                         Text(
-                            text = "LANDSCAPE MODE",
+                            text = "LANDSCAPE",
                             fontSize = 11.sp,
                             fontWeight = FontWeight.Bold,
                             color = if (selectedOrientationIsLandscape) Color.Black else Color.Gray
@@ -127,7 +118,7 @@ fun LayoutManagerModal(
                             .clickable { selectedOrientationIsLandscape = false }
                     ) {
                         Text(
-                            text = "PORTRAIT MODE",
+                            text = "PORTRAIT",
                             fontSize = 11.sp,
                             fontWeight = FontWeight.Bold,
                             color = if (!selectedOrientationIsLandscape) Color.Black else Color.Gray
@@ -135,31 +126,31 @@ fun LayoutManagerModal(
                     }
                 }
 
-                Spacer(modifier = Modifier.height(12.dp))
+                Spacer(modifier = Modifier.height(10.dp))
 
                 // Scrollable Layout List
                 LazyColumn(
                     modifier = Modifier
                         .weight(1f)
                         .fillMaxWidth(),
-                    verticalArrangement = Arrangement.spacedBy(10.dp)
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
                     // Section 1: Factory Default Layouts (Protected & Read-Only)
                     item {
                         Row(
                             verticalAlignment = Alignment.CenterVertically,
-                            modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp)
+                            modifier = Modifier.fillMaxWidth().padding(vertical = 2.dp)
                         ) {
                             Icon(
                                 imageVector = Icons.Default.Lock,
                                 contentDescription = "Protected",
                                 tint = Color(0xFFFFB300),
-                                modifier = Modifier.size(14.dp)
+                                modifier = Modifier.size(13.dp)
                             )
-                            Spacer(modifier = Modifier.width(6.dp))
+                            Spacer(modifier = Modifier.width(4.dp))
                             Text(
-                                text = "FACTORY DEFAULT PRESETS (READ-ONLY)",
-                                fontSize = 11.sp,
+                                text = "FACTORY PRESETS (READ-ONLY)",
+                                fontSize = 10.sp,
                                 fontWeight = FontWeight.Bold,
                                 color = Color(0xFFFFB300),
                                 letterSpacing = 1.sp
@@ -181,21 +172,21 @@ fun LayoutManagerModal(
 
                     // Section 2: Custom Saved Layouts
                     item {
-                        Spacer(modifier = Modifier.height(6.dp))
+                        Spacer(modifier = Modifier.height(4.dp))
                         Row(
                             verticalAlignment = Alignment.CenterVertically,
-                            modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp)
+                            modifier = Modifier.fillMaxWidth().padding(vertical = 2.dp)
                         ) {
                             Icon(
                                 imageVector = Icons.Default.Person,
                                 contentDescription = "Custom",
                                 tint = Color(0xFF69F0AE),
-                                modifier = Modifier.size(14.dp)
+                                modifier = Modifier.size(13.dp)
                             )
-                            Spacer(modifier = Modifier.width(6.dp))
+                            Spacer(modifier = Modifier.width(4.dp))
                             Text(
                                 text = "CUSTOM SAVED LAYOUTS",
-                                fontSize = 11.sp,
+                                fontSize = 10.sp,
                                 fontWeight = FontWeight.Bold,
                                 color = Color(0xFF69F0AE),
                                 letterSpacing = 1.sp
@@ -208,13 +199,13 @@ fun LayoutManagerModal(
                             Surface(
                                 color = Color(0xFF1A1A1A),
                                 shape = RoundedCornerShape(8.dp),
-                                modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp)
+                                modifier = Modifier.fillMaxWidth().padding(vertical = 2.dp)
                             ) {
                                 Text(
-                                    text = "No custom layouts saved for this orientation yet. Drag the splitters on the main screen and tap 'Save Current Layout As...' below.",
+                                    text = "No custom layouts saved yet. Drag splitters on main screen and tap 'Save Layout As...'",
                                     fontSize = 11.sp,
                                     color = Color.Gray,
-                                    modifier = Modifier.padding(12.dp)
+                                    modifier = Modifier.padding(10.dp)
                                 )
                             }
                         }
@@ -245,15 +236,15 @@ fun LayoutManagerModal(
                         onClick = { viewModel.resetToDefaultLayout(selectedOrientationIsLandscape) },
                         shape = RoundedCornerShape(8.dp),
                         colors = ButtonDefaults.outlinedButtonColors(contentColor = Color.LightGray),
-                        modifier = Modifier.weight(1f).height(42.dp)
+                        modifier = Modifier.weight(1f).height(38.dp)
                     ) {
                         Icon(
                             imageVector = Icons.Default.Refresh,
                             contentDescription = null,
-                            modifier = Modifier.size(16.dp)
+                            modifier = Modifier.size(14.dp)
                         )
                         Spacer(modifier = Modifier.width(4.dp))
-                        Text("Reset Default", fontSize = 12.sp)
+                        Text("Reset", fontSize = 11.sp)
                     }
 
                     // Save As New Layout Button
@@ -267,20 +258,22 @@ fun LayoutManagerModal(
                             containerColor = Color(0xFF00E5FF),
                             contentColor = Color.Black
                         ),
-                        modifier = Modifier.weight(1.3f).height(42.dp)
+                        modifier = Modifier.weight(1.4f).height(38.dp)
                     ) {
                         Icon(
                             imageVector = Icons.Default.Add,
                             contentDescription = null,
-                            modifier = Modifier.size(16.dp)
+                            modifier = Modifier.size(14.dp)
                         )
                         Spacer(modifier = Modifier.width(4.dp))
-                        Text("Save Layout As...", fontWeight = FontWeight.Bold, fontSize = 12.sp)
+                        Text("Save Layout As...", fontWeight = FontWeight.Bold, fontSize = 11.sp)
                     }
                 }
             }
-        }
-    }
+        },
+        confirmButton = {},
+        dismissButton = {}
+    )
 
     // Save Layout Dialog
     if (showSaveDialog) {
@@ -340,7 +333,7 @@ private fun LayoutPresetCard(
 ) {
     Surface(
         color = if (isActive) Color(0xFF1B2B38) else Color(0xFF1E1E1E),
-        shape = RoundedCornerShape(10.dp),
+        shape = RoundedCornerShape(8.dp),
         border = BorderStroke(
             width = if (isActive) 1.5.dp else 1.dp,
             color = if (isActive) Color(0xFF00E5FF) else Color(0xFF2C2C2C)
@@ -350,17 +343,17 @@ private fun LayoutPresetCard(
         Row(
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.SpaceBetween,
-            modifier = Modifier.padding(12.dp)
+            modifier = Modifier.padding(10.dp)
         ) {
             Column(modifier = Modifier.weight(1f)) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Text(
                         text = layout.name,
-                        fontSize = 14.sp,
+                        fontSize = 13.sp,
                         fontWeight = FontWeight.Bold,
                         color = Color.White
                     )
-                    Spacer(modifier = Modifier.width(8.dp))
+                    Spacer(modifier = Modifier.width(6.dp))
 
                     if (isDefault) {
                         Surface(
@@ -370,10 +363,10 @@ private fun LayoutPresetCard(
                         ) {
                             Text(
                                 text = "🔒 READ-ONLY",
-                                fontSize = 9.sp,
+                                fontSize = 8.sp,
                                 fontWeight = FontWeight.Black,
                                 color = Color(0xFFFFB300),
-                                modifier = Modifier.padding(horizontal = 5.dp, vertical = 2.dp)
+                                modifier = Modifier.padding(horizontal = 4.dp, vertical = 2.dp)
                             )
                         }
                     } else {
@@ -384,26 +377,26 @@ private fun LayoutPresetCard(
                         ) {
                             Text(
                                 text = "CUSTOM",
-                                fontSize = 9.sp,
+                                fontSize = 8.sp,
                                 fontWeight = FontWeight.Black,
                                 color = Color(0xFF69F0AE),
-                                modifier = Modifier.padding(horizontal = 5.dp, vertical = 2.dp)
+                                modifier = Modifier.padding(horizontal = 4.dp, vertical = 2.dp)
                             )
                         }
                     }
                 }
 
-                Spacer(modifier = Modifier.height(3.dp))
+                Spacer(modifier = Modifier.height(2.dp))
                 val desc = when (layout.layoutType) {
-                    LayoutType.CONSOLE_LEFT_MIXER -> "Mixer on Left (${(layout.horizontalSplitRatio * 100).toInt()}%), Cue Stack on Right"
-                    LayoutType.CUE_MASTER_LEFT -> "Cue Stack on Left (${(layout.horizontalSplitRatio * 100).toInt()}%), Mixer on Right"
-                    LayoutType.BROADCAST_BOTTOM -> "Cue Stack on Top, Mixer across Bottom (${layout.faderHeightDp}dp)"
-                    LayoutType.CLASSIC_THEATRE -> "Portrait Stack: Armed/Now Playing Top, Stack Mid, Faders Bottom (${layout.faderHeightDp}dp)"
-                    LayoutType.SPLIT_MOBILE -> "Portrait 2-Column Split: Controls Left (${(layout.horizontalSplitRatio * 100).toInt()}%), Stack Right"
+                    LayoutType.CONSOLE_LEFT_MIXER -> "Mixer Left (${(layout.horizontalSplitRatio * 100).toInt()}%), Stack Right"
+                    LayoutType.CUE_MASTER_LEFT -> "Stack Left (${(layout.horizontalSplitRatio * 100).toInt()}%), Mixer Right"
+                    LayoutType.BROADCAST_BOTTOM -> "Stack Top, Mixer Bottom (${layout.faderHeightDp}dp)"
+                    LayoutType.CLASSIC_THEATRE -> "Stack Mid, Faders Bottom (${layout.faderHeightDp}dp)"
+                    LayoutType.SPLIT_MOBILE -> "Split: Controls Left, Stack Right"
                 }
                 Text(
                     text = desc,
-                    fontSize = 11.sp,
+                    fontSize = 10.sp,
                     color = Color.LightGray
                 )
             }
@@ -412,53 +405,51 @@ private fun LayoutPresetCard(
                 if (isActive) {
                     Surface(
                         color = Color(0xFF00E5FF),
-                        shape = RoundedCornerShape(6.dp)
+                        shape = RoundedCornerShape(4.dp)
                     ) {
                         Text(
                             text = "ACTIVE",
-                            fontSize = 10.sp,
+                            fontSize = 9.sp,
                             fontWeight = FontWeight.Black,
                             color = Color.Black,
-                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
+                            modifier = Modifier.padding(horizontal = 6.dp, vertical = 3.dp)
                         )
                     }
                 } else {
                     Button(
                         onClick = onApply,
-                        shape = RoundedCornerShape(6.dp),
+                        shape = RoundedCornerShape(4.dp),
                         colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF2E2E2E)),
-                        contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp),
-                        modifier = Modifier.height(32.dp)
+                        contentPadding = PaddingValues(horizontal = 8.dp, vertical = 2.dp),
+                        modifier = Modifier.height(28.dp)
                     ) {
-                        Text("Apply", fontSize = 11.sp, color = Color.White)
+                        Text("Apply", fontSize = 10.sp, color = Color.White)
                     }
                 }
 
                 if (!isDefault) {
-                    Spacer(modifier = Modifier.width(6.dp))
-                    // Overwrite/Update button for custom layout
+                    Spacer(modifier = Modifier.width(4.dp))
                     IconButton(
                         onClick = onUpdate,
-                        modifier = Modifier.size(32.dp)
+                        modifier = Modifier.size(28.dp)
                     ) {
                         Icon(
                             imageVector = Icons.Default.Save,
                             contentDescription = "Update Layout with Current Splitters",
                             tint = Color(0xFF69F0AE),
-                            modifier = Modifier.size(16.dp)
+                            modifier = Modifier.size(14.dp)
                         )
                     }
 
-                    // Delete button
                     IconButton(
                         onClick = onDelete,
-                        modifier = Modifier.size(32.dp)
+                        modifier = Modifier.size(28.dp)
                     ) {
                         Icon(
                             imageVector = Icons.Default.Delete,
                             contentDescription = "Delete Custom Layout",
                             tint = PanicRed,
-                            modifier = Modifier.size(16.dp)
+                            modifier = Modifier.size(14.dp)
                         )
                     }
                 }
