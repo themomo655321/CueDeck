@@ -276,7 +276,7 @@ fun SettingsModal(
                         color = Color.White
                     )
                     Text(
-                        text = "Installed: v1.0.9",
+                        text = "Installed: v1.1.0",
                         fontSize = 12.sp,
                         color = Color.Gray
                     )

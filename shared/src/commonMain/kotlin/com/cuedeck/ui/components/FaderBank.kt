@@ -3,6 +3,7 @@ package com.cuedeck.ui.components
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -27,10 +28,12 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.zIndex
 import com.cuedeck.model.ActivePlayback
 import com.cuedeck.ui.theme.DarkSurface
 import com.cuedeck.ui.theme.PanicRed
 import kotlin.math.abs
+import kotlin.math.log10
 import kotlin.math.roundToInt
 
 /**
@@ -263,6 +266,8 @@ private fun FaderChannelStrip(
 
             // Vertical Tactile Fader Track
             TactileVerticalFader(
+                channelNumber = channelNumber,
+                trackName = activePlayback?.cueName ?: "CH $channelNumber",
                 volume = volume,
                 isFineMode = isFineMode,
                 isAssigned = isAssigned,
@@ -330,15 +335,17 @@ private fun FaderChannelStrip(
 }
 
 /**
- * Custom tactile vertical fader track.
- * Supports:
- * - Option A: [FINE] Mode Gear-Ratio Toggle (4x slower).
- * - Option C: Horizontal-to-Fine scrubbing with visual indicator badge.
- * - Double-Tap Reset to 100% (Unity 0dB).
- * - Immediate physical tracking up & down without sticking.
+ * Option 1: Virtual Infinite Canvas + Floating Value HUD Tactile Fader.
+ * - Virtual Travel: Expands 65dp physical travel to a 260dp virtual canvas (4x precision).
+ * - Infinite Tracking: Finger can slide up past the fader box without stopping.
+ * - Floating HUD: High-contrast bubble floats above the thumb showing % and dB.
+ * - Natural Audio Taper: Silky 0.1dB control near unity 0dB.
+ * - Double-Tap: Resets to 100% (0.0 dB).
  */
 @Composable
 private fun TactileVerticalFader(
+    channelNumber: Int,
+    trackName: String,
     volume: Float,
     isFineMode: Boolean,
     isAssigned: Boolean,
@@ -351,8 +358,7 @@ private fun TactileVerticalFader(
     val faderCapHeightPx = with(density) { faderCapHeight.toPx() }
 
     var currentDisplayVol by remember { mutableFloatStateOf(volume) }
-    var currentSpeedMultiplier by remember { mutableFloatStateOf(1.0f) }
-    var isSidePulling by remember { mutableStateOf(false) }
+    var isDragging by remember { mutableStateOf(false) }
 
     LaunchedEffect(volume) {
         currentDisplayVol = volume
@@ -369,10 +375,16 @@ private fun TactileVerticalFader(
         val normalized = clampedVol / 1.25f
         val capYOffset = travelHeight * (1f - normalized)
 
+        // Option 1: Virtual travel distance (260dp base, 1040dp in FINE mode)
+        val virtualTravelPx = with(density) {
+            val base = 260.dp.toPx()
+            if (isFineMode) base * 4f else base
+        }
+
         Box(
             modifier = Modifier
                 .fillMaxSize()
-                .pointerInput(faderCapHeightPx, isFineMode) {
+                .pointerInput(faderCapHeightPx, isFineMode, virtualTravelPx) {
                     var lastTapTime = 0L
                     var lastTapY = 0f
 
@@ -385,7 +397,7 @@ private fun TactileVerticalFader(
 
                         if (isDoubleTap) {
                             down.consume()
-                            // Double tap resets instantly to 100% (1.0f)
+                            // Double tap resets instantly to 100% (1.0f / 0.0dB)
                             currentDisplayVol = 1.0f
                             onVolumeChange(1.0f)
                             while (true) {
@@ -398,48 +410,38 @@ private fun TactileVerticalFader(
                             return@awaitEachGesture
                         }
 
-                        // Start continuous tracking
+                        // Start continuous tracking across infinite virtual canvas
+                        isDragging = true
                         var lastY = down.position.y
-                        val travelPx = (size.height.toFloat() - faderCapHeightPx).coerceAtLeast(1f)
 
                         while (true) {
                             val event = awaitPointerEvent()
                             val pointer = event.changes.firstOrNull { it.id == down.id } ?: break
                             if (!pointer.pressed) {
-                                isSidePulling = false
-                                currentSpeedMultiplier = 1.0f
+                                isDragging = false
                                 break
                             }
                             pointer.consume()
 
                             val currentY = pointer.position.y
-                            val currentX = pointer.position.x
                             val deltaY = currentY - lastY
                             lastY = currentY
 
-                            // Distance from fader groove center:
-                            // Dead center: usual 1.0x response.
-                            // Dragging to side: gear ratio decreases, fader movement becomes quicker!
-                            val faderCenterX = size.width / 2f
-                            val horizontalDistance = abs(currentX - faderCenterX)
-
-                            val speedMult = if (horizontalDistance > 25f) {
-                                (1.0f + ((horizontalDistance - 25f) / 25f)).coerceIn(1.0f, 4.5f)
-                            } else {
-                                1.0f
+                            // Natural logarithmic audio taper sensitivity:
+                            // Near unity gain (0.7f..1.25f), sensitivity is refined for 0.1dB micro-balance.
+                            // Below 0.2f, smooth taper down to zero.
+                            val audioTaperFactor = when {
+                                clampedVol > 0.7f -> 0.85f
+                                clampedVol < 0.2f -> 1.15f
+                                else -> 1.0f
                             }
-                            currentSpeedMultiplier = speedMult
-                            isSidePulling = horizontalDistance > 28f
-
-                            val effectiveMultiplier = if (isFineMode) (speedMult / 4.0f) else speedMult
 
                             // Upward drag (negative deltaY) increases volume, downward decreases
-                            val deltaVol = -(deltaY / travelPx) * 1.25f * effectiveMultiplier
+                            val deltaVol = -(deltaY / virtualTravelPx) * 1.25f * audioTaperFactor
                             currentDisplayVol = (currentDisplayVol + deltaVol).coerceIn(0f, 1.25f)
                             onVolumeChange((currentDisplayVol * 1000).roundToInt() / 1000f)
                         }
-                        isSidePulling = false
-                        currentSpeedMultiplier = 1.0f
+                        isDragging = false
                     }
                 }
         ) {
@@ -463,62 +465,82 @@ private fun TactileVerticalFader(
                     .offset(y = unityY - 1.5.dp)
                     .align(Alignment.TopCenter)
                     .clip(RoundedCornerShape(1.5.dp))
-                    .background(if (abs(clampedVol - 1.0f) < 0.02f) Color(0xFF4CAF50) else Color(0xFF666666))
+                    .background(if (abs(clampedVol - 1.0f) < 0.02f) Color(0xFF00E676) else Color(0xFF666666))
             )
 
-            // Floating Dynamic Speed Badge when pulled to the side
+            // Option 1: Floating Value HUD Bubble (Floats above finger, never blocked by thumb)
             AnimatedVisibility(
-                visible = isSidePulling,
+                visible = isDragging,
                 enter = fadeIn(),
                 exit = fadeOut(),
-                modifier = Modifier.align(Alignment.TopCenter)
+                modifier = Modifier
+                    .align(Alignment.TopCenter)
+                    .zIndex(100f)
             ) {
-                Box(
+                val isUnity = abs(clampedVol - 1.0f) < 0.02f
+                val dBVal = if (clampedVol <= 0.001f) "-∞ dB" else "%.1f dB".format(20 * log10(clampedVol))
+                val pctVal = "${(clampedVol * 100).roundToInt()}%"
+
+                Surface(
+                    color = Color(0xFF0D1B2A),
+                    shape = RoundedCornerShape(6.dp),
+                    shadowElevation = 10.dp,
+                    border = BorderStroke(1.5.dp, if (isUnity) Color(0xFF00E676) else Color(0xFF00E5FF)),
                     modifier = Modifier
-                        .clip(RoundedCornerShape(3.dp))
-                        .background(Color(0xFF00E5FF))
-                        .padding(horizontal = 4.dp, vertical = 1.dp)
+                        .offset(y = (-36).dp)
+                        .widthIn(min = 60.dp)
                 ) {
-                    Text(
-                        text = "FAST %.1fX".format(currentSpeedMultiplier),
-                        fontSize = 8.sp,
-                        fontWeight = FontWeight.Black,
-                        color = Color.Black
-                    )
+                    Column(
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        modifier = Modifier.padding(horizontal = 6.dp, vertical = 3.dp)
+                    ) {
+                        Text(
+                            text = pctVal,
+                            fontSize = 11.sp,
+                            fontWeight = FontWeight.Black,
+                            color = if (isUnity) Color(0xFF00E676) else Color.White
+                        )
+                        Text(
+                            text = dBVal,
+                            fontSize = 9.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = if (clampedVol <= 0.001f) PanicRed else Color(0xFF00E5FF)
+                        )
+                    }
                 }
             }
 
             // Physical Tactile Fader Cap
+            val isUnity = abs(clampedVol - 1.0f) < 0.02f
             Box(
                 modifier = Modifier
                     .offset(y = capYOffset)
                     .align(Alignment.TopCenter)
                     .width(36.dp)
                     .height(faderCapHeight)
-                    .shadow(elevation = 4.dp, shape = RoundedCornerShape(4.dp))
+                    .shadow(elevation = if (isDragging) 8.dp else 4.dp, shape = RoundedCornerShape(4.dp))
                     .clip(RoundedCornerShape(4.dp))
                     .background(
                         Brush.verticalGradient(
-                            colors = listOf(
-                                Color(0xFF4A4A4A),
-                                Color(0xFF2C2C2C),
-                                Color(0xFF222222)
-                            )
+                            colors = if (isDragging) {
+                                listOf(Color(0xFF555555), Color(0xFF383838), Color(0xFF262626))
+                            } else {
+                                listOf(Color(0xFF444444), Color(0xFF2C2C2C), Color(0xFF202020))
+                            }
                         )
                     )
                     .border(
-                        width = 1.dp,
-                        color = if (isAssigned) accentColor else Color(0xFF555555),
+                        width = if (isDragging) 1.5.dp else 1.dp,
+                        color = if (isDragging) Color(0xFF00E5FF) else if (isAssigned) accentColor else Color(0xFF555555),
                         shape = RoundedCornerShape(4.dp)
                     ),
                 contentAlignment = Alignment.Center
             ) {
-                val isUnity = abs(clampedVol - 1.0f) < 0.02f
                 Box(
                     modifier = Modifier
                         .fillMaxWidth(0.7f)
                         .height(2.5.dp)
-                        .background(if (isUnity) Color(0xFF4CAF50) else if (isAssigned) accentColor else Color.White)
+                        .background(if (isUnity) Color(0xFF00E676) else if (isAssigned) accentColor else Color.White)
                 )
             }
         }

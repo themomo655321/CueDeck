@@ -40,37 +40,40 @@ jobs:
       - name: Prepare APK Asset
         run: |
           mkdir -p release_assets
-          cp androidApp/build/outputs/apk/debug/androidApp-debug.apk release_assets/CueDeck-v1.0.9-debug.apk
+          cp androidApp/build/outputs/apk/debug/androidApp-debug.apk release_assets/CueDeck-v1.1.0-debug.apk
 
       - name: Upload APK as Workflow Artifact
         uses: actions/upload-artifact@v4
         with:
           name: CueDeck-debug-apk
-          path: release_assets/CueDeck-v1.0.9-debug.apk
+          path: release_assets/CueDeck-v1.1.0-debug.apk
           retention-days: 14
 
       - name: Create or Update GitHub Release
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: v1.0.9
-          name: "CueDeck v1.0.9 Preview APK"
+          tag_name: v1.1.0
+          name: "CueDeck v1.1.0 Preview APK"
           make_latest: true
           body: |
-            ### 🎛️ CueDeck v1.0.9 - Live Cue Trigger & Show Control
+            ### 🎛️ CueDeck v1.1.0 - Live Cue Trigger & Show Control
             Direct Android APK build for mobile & tablet testing (compatible with Android 11+ and ADVAN Sketsa 2).
 
-            #### 🛠️ What's New in v1.0.9:
-            - **Click Standby / Armed Card to Open Cue Edit**:
-              - Tap anywhere on the Armed / Standby card on the top left to instantly open the selected cue's settings modal.
-            - **Volume Rocker Wrap Around**:
-              - Volume UP from the top of the cue stack wraps directly to the last cue at the bottom.
-              - Volume DOWN from the bottom wraps directly to the top cue.
-            - **Dynamic Fader Gear Ratio (Side-Pull Sensitivity)**:
-              - When holding and pulling a vertical fader, dead center gives standard 1:1 fader response.
-              - Dragging your finger to the side adjusts the gear ratio: the further away from center, the faster the fader sweeps (up to 4.5X speed) with a floating `FAST %.1fX` visual indicator.
-            - **Reverb / Echo Fade-Out Tail**:
-              - Added a compact `[✦ TAIL]` toggle button on each of the 4 mixer faders.
-              - When active, reverb wetness automatically increases as volume drops near 3% down to 0%, leaving a lush 1.8-second decay tail instead of an abrupt hard cut for smooth stage transitions.
-          files: release_assets/CueDeck-v1.0.9-debug.apk
+            #### 🛠️ What's New in v1.1.0:
+            - **Option 1: Virtual Infinite Canvas Mixer Faders**:
+              - Expanded the physical 65dp travel to a generous **260dp virtual canvas** (and **1040dp in FINE mode**), giving 4× higher physical resolution for micro-precision control without twitching.
+              - **Infinite Drag Tracking**: Once touched, you can slide your finger up across the entire screen height without hitting box boundaries or sticking.
+            - **Floating Value HUD (Zero Thumb Obstruction)**:
+              - A high-contrast floating bubble appears 36dp above the fader cap showing exact **percentage (`94%`)** and **decibels (`-0.5 dB`, `0.0 dB`, `-∞ dB`)**.
+              - Your thumb never blocks your view of the level.
+            - **Logarithmic Audio Taper Curve**:
+              - Refined resolution near unity gain (0.7–1.25) allows smooth 0.1dB balance moves, while the lower range smoothly tapers down into silence.
+            - **Instant Unity Gain Reset**:
+              - Double-tapping the fader cap or percentage readout instantly snaps to 100% (0.0 dB).
+            - **Retained from v1.0.9**:
+              - Click Armed / Standby card on top-left to open Cue Edit modal.
+              - Volume Rocker wrap-around navigation.
+              - Reverb / Echo Fade-out Tail (`[✦ TAIL]` toggle) with 1.8s smooth decay.
+          files: release_assets/CueDeck-v1.1.0-debug.apk
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
