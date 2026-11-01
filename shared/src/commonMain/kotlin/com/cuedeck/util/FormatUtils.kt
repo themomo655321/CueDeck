@@ -47,3 +47,14 @@ fun formatDurationPrecise(totalMs: Long): String {
         "$s.${padTwoDigits(hundredths)}"
     }
 }
+
+fun randomUUID(): String {
+    val chars = "0123456789abcdef"
+    val sb = StringBuilder()
+    for (i in 0 until 32) {
+        if (i == 8 || i == 12 || i == 16 || i == 20) sb.append('-')
+        val r = kotlin.random.Random.nextInt(16)
+        sb.append(chars[r])
+    }
+    return sb.toString()
+}

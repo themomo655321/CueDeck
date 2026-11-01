@@ -2,6 +2,7 @@ package com.cuedeck.audio
 
 import com.cuedeck.model.ActivePlayback
 import com.cuedeck.model.Cue
+import com.cuedeck.model.TriggerMode
 import kotlinx.cinterop.ExperimentalForeignApi
 import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.MutableSharedFlow
@@ -66,11 +67,10 @@ class IosAudioEngine : AudioEngine {
         for ((_, track) in activeTracks) {
             val currentMs = (track.player.currentTime * 1000.0).toLong()
             val totalSpan = max(1L, track.endMs - track.startMs)
-            val progress = ((currentMs - track.startMs).toFloat() / totalSpan).coerceIn(0f, 1f)
-            val remainingMs = max(0L, track.endMs - currentMs)
+            val isLooping = track.cue.triggerMode == TriggerMode.LOOP
 
             if (!track.player.isPlaying() || currentMs >= track.endMs) {
-                if (!track.cue.isLooping) {
+                if (!isLooping) {
                     finishedTracks.add(track)
                     continue
                 }
@@ -81,12 +81,11 @@ class IosAudioEngine : AudioEngine {
                     playbackId = track.playbackId,
                     cueId = track.cue.id,
                     cueName = track.cue.name,
-                    progress = progress,
-                    remainingMs = remainingMs,
-                    totalMs = totalSpan,
                     colorHex = track.cue.colorHex,
-                    currentVolume = track.currentVolume,
-                    isLooping = track.cue.isLooping,
+                    elapsedMs = (currentMs - track.startMs).coerceAtLeast(0L),
+                    totalMs = totalSpan,
+                    volume = track.currentVolume,
+                    isLooping = isLooping,
                     isFadingOut = track.isFadingOut
                 )
             )
@@ -112,11 +111,11 @@ class IosAudioEngine : AudioEngine {
         player.prepareToPlay()
 
         val totalDurationMs = (player.duration * 1000.0).toLong()
-        val startMs = cue.startTrimMs.coerceIn(0L, totalDurationMs)
-        val endMs = if (cue.endTrimMs > startMs) cue.endTrimMs.coerceAtMost(totalDurationMs) else totalDurationMs
+        val startMs = cue.inPointMs.coerceIn(0L, totalDurationMs)
+        val endMs = if (cue.outPointMs > startMs) cue.outPointMs.coerceAtMost(totalDurationMs) else totalDurationMs
 
         player.currentTime = startMs / 1000.0
-        player.numberOfLoops = if (cue.isLooping) -1 else 0
+        player.numberOfLoops = if (cue.triggerMode == TriggerMode.LOOP) -1 else 0
 
         val initialVol = if (cue.fadeInMs > 0) 0f else (cue.volume * masterVolume).coerceIn(0f, 1.5f)
         player.setVolume(initialVol)

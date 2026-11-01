@@ -10,7 +10,7 @@ import com.cuedeck.storage.ShowSummary
 import com.cuedeck.storage.StorageInspection
 import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.*
-import java.util.UUID
+import com.cuedeck.util.randomUUID
 
 class CueDeckViewModel(
     private val repository: ShowRepository,
@@ -418,7 +418,7 @@ class CueDeckViewModel(
             val index = show.cues.indexOfFirst { it.id == cueId }
             if (index < 0) return@update show
             val source = show.cues[index]
-            val newId = UUID.randomUUID().toString()
+            val newId = randomUUID()
             val duplicated = source.copy(
                 id = newId,
                 name = "${source.name} (Copy)"
@@ -453,7 +453,7 @@ class CueDeckViewModel(
                     for (result in results) {
                         val nextNum = _show.value.cues.size + 1
                         val newCue = Cue(
-                            id = UUID.randomUUID().toString(),
+                            id = randomUUID(),
                             cueNumber = "$nextNum",
                             name = result.title,
                             audioRelativePath = result.relativePath,
@@ -516,7 +516,7 @@ class CueDeckViewModel(
 
     fun createNewShow(title: String = "New Show") {
         val newShow = createDefaultShow().copy(
-            id = UUID.randomUUID().toString(),
+            id = randomUUID(),
             title = title,
             cues = emptyList()
         )
@@ -556,7 +556,7 @@ class CueDeckViewModel(
     }
 
     fun saveShowAs(newTitle: String) {
-        val newId = UUID.randomUUID().toString()
+        val newId = randomUUID()
         val copied = _show.value.copy(
             id = newId,
             title = newTitle
@@ -696,7 +696,7 @@ class CueDeckViewModel(
         val current = _workspaceLayoutState.value
         val activeLayout = getActiveLayout(isLandscape)
 
-        val newId = "custom_" + UUID.randomUUID().toString().take(8)
+        val newId = "custom_" + randomUUID().take(8)
         val newLayout = WorkspaceLayout(
             id = newId,
             name = name.trim(),
