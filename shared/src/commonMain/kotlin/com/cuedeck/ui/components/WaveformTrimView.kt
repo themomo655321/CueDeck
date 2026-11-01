@@ -29,6 +29,7 @@ import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import kotlinx.datetime.Clock
 import kotlin.math.abs
 import kotlin.math.sin
 
@@ -280,7 +281,7 @@ fun WaveformTrimView(
                                         val deltaSec = (inDragAccPx / totalWidthPx) * duration
                                         val newSec = (inDragStartSec + deltaSec).coerceIn(0f, (outPointSec - 0.05f).coerceAtLeast(0f))
                                         onInPointChange(newSec)
-                                        val now = System.currentTimeMillis()
+                                        val now = Clock.System.now().toEpochMilliseconds()
                                         if (now - lastScrubTimestamp > 60L) {
                                             lastScrubTimestamp = now
                                             onScrub?.invoke(newSec)
@@ -343,7 +344,7 @@ fun WaveformTrimView(
                                         val deltaSec = (outDragAccPx / totalWidthPx) * duration
                                         val newSec = (outDragStartSec + deltaSec).coerceIn(inPointSec + 0.05f, duration)
                                         onOutPointChange(newSec)
-                                        val now = System.currentTimeMillis()
+                                        val now = Clock.System.now().toEpochMilliseconds()
                                         if (now - lastScrubTimestamp > 60L) {
                                             lastScrubTimestamp = now
                                             onScrub?.invoke(newSec)
@@ -389,5 +390,6 @@ private fun formatTime(sec: Float): String {
     val tenths = ((sec - totalSeconds) * 10).toInt()
     val minutes = totalSeconds / 60
     val seconds = totalSeconds % 60
-    return "%d:%02d.%d".format(minutes, seconds, tenths)
+    val sStr = if (seconds in 0..9) "0$seconds" else "$seconds"
+    return "$minutes:$sStr.$tenths"
 }

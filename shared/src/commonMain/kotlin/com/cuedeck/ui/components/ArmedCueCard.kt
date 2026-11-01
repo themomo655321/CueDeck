@@ -17,6 +17,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.cuedeck.model.Cue
 import com.cuedeck.ui.theme.ArmedBlue
+import com.cuedeck.util.formatTime
 
 /**
  * Ultra-compact 1-row broadcast stage ribbon for Armed / Standby cue (~38dp height).
@@ -118,10 +119,8 @@ fun ArmedCueCard(
                     horizontalArrangement = Arrangement.spacedBy(6.dp)
                 ) {
                     val sec = armedCue.effectiveDurationMs / 1000
-                    val min = sec / 60
-                    val remSec = sec % 60
                     Text(
-                        text = "%d:%02d".format(min, remSec),
+                        text = formatTime(sec),
                         fontSize = 11.sp,
                         fontWeight = FontWeight.SemiBold,
                         color = Color(0xFFAAAAAA)

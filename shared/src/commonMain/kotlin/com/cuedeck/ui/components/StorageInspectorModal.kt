@@ -23,6 +23,7 @@ import androidx.compose.ui.unit.sp
 import com.cuedeck.storage.StorageInspection
 import com.cuedeck.ui.theme.DarkSurface
 import com.cuedeck.ui.theme.PanicRed
+import com.cuedeck.util.formatTwoDecimals
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -97,7 +98,7 @@ fun StorageInspectorModal(
                         )
                         val totalMb = inspection.totalSizeBytes / (1024f * 1024f)
                         Text(
-                            text = "TOTAL CONSUMED: %.2f MB (%d audio files)".format(totalMb, inspection.files.size),
+                            text = "TOTAL CONSUMED: ${formatTwoDecimals(totalMb)} MB (${inspection.files.size} audio files)",
                             fontSize = 12.sp,
                             fontWeight = FontWeight.Bold,
                             color = if (totalMb > 300f) Color(0xFFFFB300) else Color(0xFF4CAF50)
@@ -172,7 +173,7 @@ fun StorageInspectorModal(
                                         maxLines = 1
                                     )
                                     Text(
-                                        text = "%.2f MB".format(sizeMb),
+                                        text = "${formatTwoDecimals(sizeMb)} MB",
                                         fontSize = 10.sp,
                                         color = Color.Gray
                                     )

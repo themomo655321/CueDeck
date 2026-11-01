@@ -27,6 +27,7 @@ import androidx.compose.ui.zIndex
 import com.cuedeck.model.Cue
 import com.cuedeck.ui.theme.ArmedBlue
 import com.cuedeck.ui.theme.DarkSurface
+import com.cuedeck.util.formatTime
 
 @Composable
 fun CueListSection(
@@ -180,7 +181,7 @@ private fun CueRow(
     onEndDrag: () -> Unit = {}
 ) {
     val sec = cue.effectiveDurationMs / 1000
-    val durationText = "%d:%02d".format(sec / 60, sec % 60)
+    val durationText = formatTime(sec)
 
     Surface(
         color = when {

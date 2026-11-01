@@ -25,6 +25,8 @@ import androidx.compose.ui.unit.sp
 import com.cuedeck.model.ActivePlayback
 import com.cuedeck.ui.theme.DarkSurface
 import com.cuedeck.ui.theme.PanicRed
+import com.cuedeck.util.formatCountdown
+import com.cuedeck.util.formatTime
 
 /**
  * Stage-grade Now Playing Drawer.
@@ -129,8 +131,8 @@ private fun ActiveCueRow(
                 // Countdown / Duration badge
                 val timeLabel = when {
                     playback.isLooping -> "LOOP"
-                    showDurationMode -> "%d:%02d".format(totalSec / 60, totalSec % 60)
-                    else -> "-%d:%02d".format(remSec / 60, remSec % 60)
+                    showDurationMode -> formatTime(totalSec)
+                    else -> formatCountdown(remSec)
                 }
                 Box(
                     modifier = Modifier

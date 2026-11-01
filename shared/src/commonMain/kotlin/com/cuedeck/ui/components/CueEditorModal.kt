@@ -27,6 +27,8 @@ import androidx.compose.ui.unit.sp
 import com.cuedeck.model.*
 import com.cuedeck.ui.theme.DarkSurface
 import com.cuedeck.ui.theme.PanicRed
+import com.cuedeck.util.formatDurationPrecise
+import com.cuedeck.util.formatOneDecimal
 import kotlin.math.abs
 
 val PRESET_COLORS = listOf(
@@ -320,7 +322,7 @@ fun CueEditorModal(
             }
             Row(modifier = Modifier.fillMaxWidth()) {
                 Column(modifier = Modifier.weight(1f)) {
-                    Text("Fade-in: %.1fs".format(fadeInSec), fontSize = 12.sp, color = Color.Gray)
+                    Text("Fade-in: ${formatOneDecimal(fadeInSec)}s", fontSize = 12.sp, color = Color.Gray)
                     Slider(
                         value = fadeInSec,
                         onValueChange = { fadeInSec = it },
@@ -329,7 +331,7 @@ fun CueEditorModal(
                 }
                 Spacer(modifier = Modifier.width(12.dp))
                 Column(modifier = Modifier.weight(1f)) {
-                    Text("Fade-out: %.1fs".format(fadeOutSec), fontSize = 12.sp, color = Color.Gray)
+                    Text("Fade-out: ${formatOneDecimal(fadeOutSec)}s", fontSize = 12.sp, color = Color.Gray)
                     Slider(
                         value = fadeOutSec,
                         onValueChange = { fadeOutSec = it },
@@ -491,9 +493,6 @@ private fun parseTimeToSeconds(input: String): Float? {
 }
 
 private fun formatSeconds(sec: Float): String {
-    val totalSec = sec.toInt()
-    val hundredths = ((sec - totalSec) * 100).toInt()
-    val min = totalSec / 60
-    val s = totalSec % 60
-    return if (min > 0) "%d:%02d.%02d".format(min, s, hundredths) else "%.2f".format(sec)
+    val totalMs = (sec * 1000).toLong()
+    return formatDurationPrecise(totalMs)
 }

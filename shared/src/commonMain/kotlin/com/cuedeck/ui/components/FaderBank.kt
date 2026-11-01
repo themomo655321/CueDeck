@@ -28,6 +28,7 @@ import androidx.compose.ui.unit.sp
 import com.cuedeck.model.ActivePlayback
 import com.cuedeck.ui.theme.DarkSurface
 import com.cuedeck.ui.theme.PanicRed
+import com.cuedeck.util.formatDecibels
 import kotlinx.coroutines.delay
 import kotlin.math.abs
 import kotlin.math.log10
@@ -519,7 +520,7 @@ private fun TactileVerticalFader(
                     .align(Alignment.TopCenter)
             ) {
                 val isUnity = abs(clampedVol - 1.0f) < 0.02f
-                val dBVal = if (clampedVol <= 0.001f) "-inf dB" else "%.1f dB".format(20 * log10(clampedVol))
+                val dBVal = formatDecibels(clampedVol)
                 Surface(
                     color = Color(0xFF141414),
                     shape = RoundedCornerShape(6.dp),
