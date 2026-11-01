@@ -65,11 +65,6 @@ kotlin {
                 implementation(libs.kotlinx.coroutines.swing)
             }
         }
-
-        val iosMain by getting {
-            dependencies {
-            }
-        }
     }
 }
 

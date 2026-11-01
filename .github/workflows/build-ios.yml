@@ -39,7 +39,18 @@ jobs:
 
       - name: Build Kotlin Multiplatform iOS Framework
         run: |
-          ./gradlew :shared:linkReleaseFrameworkIosArm64 --no-daemon --stacktrace
+          set -o pipefail
+          ./gradlew :shared:linkReleaseFrameworkIosArm64 --no-daemon --stacktrace 2>&1 | tee build_log_ios.txt
+
+      - name: Push Build Log on Failure
+        if: failure()
+        run: |
+          git config user.name "github-actions"
+          git config user.email "actions@github.com"
+          git checkout -b build-failure-log-ios || git checkout build-failure-log-ios
+          git add build_log_ios.txt || true
+          git commit -m "ios build failure log" || true
+          git push -f origin build-failure-log-ios || true
 
       - name: Generate Xcode Project
         run: |

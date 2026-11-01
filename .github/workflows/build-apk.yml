@@ -45,9 +45,10 @@ jobs:
           git config user.name "github-actions"
           git config user.email "actions@github.com"
           git checkout -b build-failure-log || git checkout build-failure-log
+          touch build_log.txt
           git add build_log.txt
-          git commit -m "build failure log"
-          git push -f origin build-failure-log
+          git commit -m "build failure log" || true
+          git push -f origin build-failure-log || true
 
       - name: Prepare APK Asset
         run: |
