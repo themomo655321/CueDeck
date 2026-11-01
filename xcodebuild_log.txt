@@ -1,0 +1,17 @@
+Command line invocation:
+    /Applications/Xcode_15.4.app/Contents/Developer/usr/bin/xcodebuild -project iosApp.xcodeproj -scheme iosApp -destination generic/platform=iOS -configuration Release build -derivedDataPath ../build/DerivedData CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO CODE_SIGN_IDENTITY=
+
+User defaults from command line:
+    IDEDerivedDataPathOverride = /Users/runner/work/CueDeck/CueDeck/build/DerivedData
+    IDEPackageSupportUseBuiltinSCM = YES
+
+Build settings from command line:
+    CODE_SIGN_IDENTITY = 
+    CODE_SIGNING_ALLOWED = NO
+    CODE_SIGNING_REQUIRED = NO
+
+2026-11-01 05:54:05.950 xcodebuild[16526:47526] Writing error result bundle to /var/folders/s6/5hzmn6lx4dz5nxs7k_0slzph0000gn/T/ResultBundle_2026-01-11_05-54-0005.xcresult
+xcodebuild: error: Unable to read project 'iosApp.xcodeproj'.
+	Reason: The project ‘iosApp’ cannot be opened because it is in a future Xcode project file format (77). Adjust the project format using a compatible version of Xcode to allow it to be opened by this version of Xcode.
+
+
