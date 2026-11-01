@@ -240,13 +240,15 @@ class IosAudioEngine : AudioEngine {
 
     override suspend fun startPreview(
         cue: Cue,
+        basePath: String,
         startMs: Long,
         endMs: Long,
-        onUpdate: (currentMs: Long) -> Unit,
-        onDone: () -> Unit
+        onPositionUpdate: (Long) -> Unit,
+        onCompleted: () -> Unit
     ) {
         stopPreview()
-        val url = NSURL.fileURLWithPath(cue.audioRelativePath)
+        val fullPath = "$basePath/${cue.audioRelativePath}"
+        val url = NSURL.fileURLWithPath(fullPath)
         val player = AVAudioPlayer(contentsOfURL = url, error = null) ?: return
         previewPlayer = player
         player.currentTime = startMs / 1000.0
@@ -256,13 +258,13 @@ class IosAudioEngine : AudioEngine {
         previewJob = engineScope.launch {
             while (isActive && player.isPlaying()) {
                 val current = (player.currentTime * 1000.0).toLong()
-                onUpdate(current)
+                onPositionUpdate(current)
                 if (current >= endMs) break
                 delay(50)
             }
             player.stop()
             previewPlayer = null
-            onDone()
+            onCompleted()
         }
     }
 
