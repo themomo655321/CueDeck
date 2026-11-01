@@ -27,4 +27,4 @@ targets:
         CODE_SIGNING_REQUIRED: false
     dependencies:
       - framework: ../shared/build/bin/iosArm64/releaseFramework/shared.framework
-        embed: true
+        embed: false

@@ -1,5 +1,6 @@
 package com.cuedeck
 
+import androidx.compose.runtime.remember
 import androidx.compose.ui.window.ComposeUIViewController
 import com.cuedeck.audio.IosAudioEngine
 import com.cuedeck.storage.PlatformStorage
@@ -11,13 +12,16 @@ import platform.UIKit.UIImpactFeedbackStyle
 import platform.UIKit.UIViewController
 
 fun MainViewController(): UIViewController = ComposeUIViewController {
-    val storage = PlatformStorage()
-    val repository = ShowRepository(storage)
-    val audioEngine = IosAudioEngine()
-    val viewModel = CueDeckViewModel(repository, audioEngine)
+    val storage = remember { PlatformStorage() }
+    val repository = remember { ShowRepository(storage) }
+    val audioEngine = remember { IosAudioEngine() }
+    val viewModel = remember { CueDeckViewModel(repository, audioEngine) }
 
-    val hapticGenerator = UIImpactFeedbackGenerator(UIImpactFeedbackStyle.UIImpactFeedbackStyleMedium)
-    hapticGenerator.prepare()
+    val hapticGenerator = remember {
+        UIImpactFeedbackGenerator(UIImpactFeedbackStyle.UIImpactFeedbackStyleMedium).apply {
+            prepare()
+        }
+    }
 
     MainScreen(
         viewModel = viewModel,

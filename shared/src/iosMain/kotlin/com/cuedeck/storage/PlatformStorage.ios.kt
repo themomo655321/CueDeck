@@ -52,13 +52,23 @@ actual class PlatformStorage {
     }
 
     actual fun writeText(filePath: String, text: String) {
-        val nsStr = NSString.create(string = text)
-        nsStr.writeToFile(filePath, atomically = true, encoding = NSUTF8StringEncoding, error = null)
+        try {
+            val parent = (filePath as NSString).stringByDeletingLastPathComponent
+            if (!fileManager.fileExistsAtPath(parent)) {
+                fileManager.createDirectoryAtPath(parent, withIntermediateDirectories = true, attributes = null, error = null)
+            }
+            val nsStr = NSString.create(string = text)
+            nsStr.writeToFile(filePath, atomically = true, encoding = NSUTF8StringEncoding, error = null)
+        } catch (ignored: Exception) {}
     }
 
     actual fun readText(filePath: String): String? {
-        if (!fileManager.fileExistsAtPath(filePath)) return null
-        return NSString.stringWithContentsOfFile(filePath, encoding = NSUTF8StringEncoding, error = null) as? String
+        return try {
+            if (!fileManager.fileExistsAtPath(filePath)) return null
+            NSString.create(contentsOfFile = filePath, encoding = NSUTF8StringEncoding, error = null) as? String
+        } catch (e: Exception) {
+            null
+        }
     }
 
     actual fun listShowIds(): List<String> {
