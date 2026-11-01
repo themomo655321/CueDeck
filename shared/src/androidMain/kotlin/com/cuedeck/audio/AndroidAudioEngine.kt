@@ -400,15 +400,6 @@ class AndroidAudioEngine(private val context: Context) : AudioEngine {
         if (track.isReleased.compareAndSet(false, true)) {
             track.fadeJob?.cancel()
             track.monitorJob?.cancel()
-            track.tailJob?.cancel()
-            try {
-                track.presetReverb?.enabled = false
-                track.presetReverb?.release()
-            } catch (ignored: Exception) {}
-            try {
-                track.environmentalReverb?.enabled = false
-                track.environmentalReverb?.release()
-            } catch (ignored: Exception) {}
             try {
                 if (safeIsPlaying(track.player)) {
                     track.player.stop()
