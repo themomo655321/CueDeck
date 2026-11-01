@@ -57,15 +57,27 @@ jobs:
           cd iosApp
           xcodegen generate
 
-      - name: Archive iOS App
+      - name: Build iOS App
         run: |
+          set -o pipefail
           cd iosApp
-          xcodebuild -project iosApp.xcodeproj -scheme iosApp -destination "generic/platform=iOS" -configuration Release archive -archivePath build/CueDeck.xcarchive CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO CODE_SIGN_IDENTITY=""
+          xcodebuild -project iosApp.xcodeproj -scheme iosApp -destination "generic/platform=iOS" -configuration Release build -derivedDataPath ../build/DerivedData CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO CODE_SIGN_IDENTITY="" 2>&1 | tee ../xcodebuild_log.txt
+
+      - name: Push Build Log on Failure
+        if: failure()
+        run: |
+          git config user.name "github-actions"
+          git config user.email "actions@github.com"
+          git checkout -b build-failure-log-ios || git checkout build-failure-log-ios
+          touch xcodebuild_log.txt build_log_ios.txt
+          git add xcodebuild_log.txt build_log_ios.txt || true
+          git commit -m "ios build failure log" || true
+          git push -f origin build-failure-log-ios || true
 
       - name: Package Payload into IPA
         run: |
           mkdir -p release_assets/Payload
-          cp -r iosApp/build/CueDeck.xcarchive/Products/Applications/*.app release_assets/Payload/
+          cp -r build/DerivedData/Build/Products/Release-iphoneos/*.app release_assets/Payload/
           cd release_assets && zip -r CueDeck-v1.1.4.ipa Payload
 
       - name: Upload IPA as Workflow Artifact

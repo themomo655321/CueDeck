@@ -26,3 +26,5 @@ fun MainViewController(): UIViewController = ComposeUIViewController {
         }
     )
 }
+
+fun mainViewController(): UIViewController = MainViewController()
