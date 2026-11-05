@@ -201,6 +201,7 @@ class AndroidAudioEngine(private val context: Context) : AudioEngine {
                 }
             }
             track.monitorJob = monitorJob
+            updateActiveState()
 
             playbackId
         } catch (e: Exception) {

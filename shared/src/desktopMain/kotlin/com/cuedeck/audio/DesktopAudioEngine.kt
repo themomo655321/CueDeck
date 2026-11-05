@@ -132,6 +132,7 @@ class DesktopAudioEngine : AudioEngine {
                 }
             }
 
+            updateActiveState()
             playbackId
         } catch (e: Exception) {
             e.printStackTrace()

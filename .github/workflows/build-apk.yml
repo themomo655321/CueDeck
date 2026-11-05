@@ -53,34 +53,30 @@ jobs:
       - name: Prepare APK Asset
         run: |
             mkdir -p release_assets
-            cp androidApp/build/outputs/apk/debug/androidApp-debug.apk release_assets/CueDeck-v1.1.5-debug.apk
+            cp androidApp/build/outputs/apk/debug/androidApp-debug.apk release_assets/CueDeck-v1.1.6-debug.apk
 
       - name: Upload APK as Workflow Artifact
         uses: actions/upload-artifact@v4
         with:
           name: CueDeck-debug-apk
-          path: release_assets/CueDeck-v1.1.5-debug.apk
+          path: release_assets/CueDeck-v1.1.6-debug.apk
           retention-days: 14
 
       - name: Create or Update GitHub Release
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: v1.1.5
-          name: "CueDeck v1.1.5 - Now Playing Pause & Scrub Seek"
+          tag_name: v1.1.6
+          name: "CueDeck v1.1.6 - Auto Crossfade & Outgoing Fade Fix"
           make_latest: true
           body: |
-            ### 🎛️ CueDeck v1.1.5 - Now Playing Pause/Resume & Interactive Scrub Seek
+            ### 🎛️ CueDeck v1.1.6 - Bidirectional Auto-Crossfade & Outgoing Fade Fix
             Direct Android APK build for mobile & tablet live testing.
 
-            #### 🛠️ What's New in v1.1.5:
-            - **Live Pause & Resume on Now Playing Cues**:
-              - Instant single-tap Pause / Play button added to every active playback row.
-              - Live countdown badge clearly indicates `PAUSED` state with amber feedback.
-              - Full cross-platform audio pause/resume support (`AndroidAudioEngine`, `IosAudioEngine`, `DesktopAudioEngine`).
-            - **Interactive Touch & Drag Scrubber Seek Bar**:
-              - Replaced static progress indicator with an interactive stage scrubber.
-              - Tap anywhere along the bar to immediately jump the playhead, or drag your finger smoothly to scrub forward/backward.
-              - Real-time thumb indicator and progress line reflecting live position.
-          files: release_assets/CueDeck-v1.1.5-debug.apk
+            #### 🛠️ What's New in v1.1.6:
+            - **Bidirectional Auto-Crossfade on GO**:
+              - Fixed crossfade when enabled on either the outgoing playing track (e.g., background music) OR the incoming track.
+              - When any new cue is triggered via GO, any playing track with Auto Crossfade enabled will now smoothly fade out over its configured fade time instead of continuing to play.
+              - Synchronous active state updates in audio engines eliminate race conditions on rapid sequential triggers.
+          files: release_assets/CueDeck-v1.1.6-debug.apk
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

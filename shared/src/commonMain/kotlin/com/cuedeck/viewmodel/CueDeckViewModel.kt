@@ -205,11 +205,19 @@ class CueDeckViewModel(
                     delay(armedCue.preWaitMs)
                 }
 
-                // If this cue has crossfadeOnGo enabled, smoothly fade out any currently playing tracks
-                if (armedCue.crossfadeOnGo) {
-                    val active = activePlaybacks.value
-                    val xFadeMs = armedCue.crossfadeDurationMs
-                    for (track in active) {
+                // Smoothly crossfade/fade out active tracks if:
+                // 1) The incoming cue has crossfadeOnGo enabled, OR
+                // 2) Any currently playing cue has crossfadeOnGo enabled
+                val active = activePlaybacks.value
+                for (track in active) {
+                    val playingCue = currentShow.findCue(track.cueId)
+                    val shouldCrossfade = armedCue.crossfadeOnGo || (playingCue?.crossfadeOnGo == true)
+                    if (shouldCrossfade) {
+                        val xFadeMs = if (armedCue.crossfadeOnGo) {
+                            armedCue.crossfadeDurationMs
+                        } else {
+                            playingCue?.crossfadeDurationMs ?: 1500L
+                        }
                         audioEngine.stop(track.playbackId, xFadeMs)
                     }
                 }

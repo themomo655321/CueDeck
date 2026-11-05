@@ -377,8 +377,8 @@ fun CueEditorModal(
                 modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp)
             ) {
                 Column(modifier = Modifier.weight(1f)) {
-                    Text("Crossfade Out Previous Track on GO", fontWeight = FontWeight.Bold, fontSize = 13.sp, color = Color.White)
-                    Text("Smoothly fade out whatever was playing when this cue starts", fontSize = 11.sp, color = Color.Gray)
+                    Text("Auto Crossfade on GO", fontWeight = FontWeight.Bold, fontSize = 13.sp, color = Color.White)
+                    Text("Smoothly fade out previous track, or fade out this track when next cue starts", fontSize = 11.sp, color = Color.Gray)
                 }
                 Switch(
                     checked = crossfadeOnGo,
