@@ -306,6 +306,27 @@ class CueDeckViewModel(
         }
     }
 
+    fun togglePausePlayback(playbackId: String) {
+        val item = activePlaybacks.value.find { it.playbackId == playbackId } ?: return
+        if (item.isPaused) {
+            audioEngine.resume(playbackId)
+        } else {
+            audioEngine.pause(playbackId)
+        }
+    }
+
+    fun pauseActivePlayback(playbackId: String) {
+        audioEngine.pause(playbackId)
+    }
+
+    fun resumeActivePlayback(playbackId: String) {
+        audioEngine.resume(playbackId)
+    }
+
+    fun seekActivePlayback(playbackId: String, positionMs: Long) {
+        audioEngine.seekTo(playbackId, positionMs)
+    }
+
     fun panicStop(fadeOutMs: Long? = null) {
         val effectiveFade = fadeOutMs ?: _settings.value.panicFadeMs
         coroutineScope.launch {

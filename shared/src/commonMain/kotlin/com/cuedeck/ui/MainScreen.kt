@@ -135,6 +135,8 @@ fun MainScreen(
                                     ActiveCuesDrawer(
                                         activePlaybacks = activePlaybacks,
                                         onStopCue = { id, fade -> viewModel.stopActivePlayback(id, fade) },
+                                        onTogglePause = { id -> viewModel.togglePausePlayback(id) },
+                                        onSeek = { id, pos -> viewModel.seekActivePlayback(id, pos) },
                                         modifier = Modifier.weight(1f),
                                         maxHeightDp = 68
                                     )
@@ -287,6 +289,8 @@ fun MainScreen(
                                     ActiveCuesDrawer(
                                         activePlaybacks = activePlaybacks,
                                         onStopCue = { id, fade -> viewModel.stopActivePlayback(id, fade) },
+                                        onTogglePause = { id -> viewModel.togglePausePlayback(id) },
+                                        onSeek = { id, pos -> viewModel.seekActivePlayback(id, pos) },
                                         modifier = Modifier.weight(1f),
                                         maxHeightDp = 70
                                     )
@@ -351,6 +355,8 @@ fun MainScreen(
                             ActiveCuesDrawer(
                                 activePlaybacks = activePlaybacks,
                                 onStopCue = { id, fade -> viewModel.stopActivePlayback(id, fade) },
+                                onTogglePause = { id -> viewModel.togglePausePlayback(id) },
+                                onSeek = { id, pos -> viewModel.seekActivePlayback(id, pos) },
                                 modifier = Modifier.fillMaxWidth(),
                                 maxHeightDp = 70
                             )
@@ -655,6 +661,8 @@ private fun CueStackAndControlsColumn(
         ActiveCuesDrawer(
             activePlaybacks = activePlaybacks,
             onStopCue = { id, fade -> viewModel.stopActivePlayback(id, fade) },
+            onTogglePause = { id -> viewModel.togglePausePlayback(id) },
+            onSeek = { id, pos -> viewModel.seekActivePlayback(id, pos) },
             modifier = Modifier.fillMaxWidth(),
             maxHeightDp = 58
         )

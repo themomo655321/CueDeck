@@ -36,6 +36,7 @@ class IosAudioEngine : AudioEngine {
         val endMs: Long,
         var currentVolume: Float,
         var isFadingOut: Boolean = false,
+        var isPaused: Boolean = false,
         var fadeJob: Job? = null
     )
 
@@ -69,7 +70,7 @@ class IosAudioEngine : AudioEngine {
             val totalSpan = max(1L, track.endMs - track.startMs)
             val isLooping = track.cue.triggerMode == TriggerMode.LOOP
 
-            if (!track.player.isPlaying() || currentMs >= track.endMs) {
+            if (!track.isPaused && (!track.player.isPlaying() || currentMs >= track.endMs)) {
                 if (!isLooping) {
                     finishedTracks.add(track)
                     continue
@@ -86,7 +87,8 @@ class IosAudioEngine : AudioEngine {
                     totalMs = totalSpan,
                     volume = track.currentVolume,
                     isLooping = isLooping,
-                    isFadingOut = track.isFadingOut
+                    isFadingOut = track.isFadingOut,
+                    isPaused = track.isPaused
                 )
             )
         }
@@ -204,6 +206,31 @@ class IosAudioEngine : AudioEngine {
             val target = (track.cue.volume * currentMasterVolume).coerceIn(0f, 1.5f)
             track.player.setVolume(target)
         }
+    }
+
+    override fun pause(playbackId: String) {
+        val track = activeTracks[playbackId] ?: return
+        if (track.isPaused) return
+        track.isPaused = true
+        track.player.pause()
+        updateActiveState()
+    }
+
+    override fun resume(playbackId: String) {
+        val track = activeTracks[playbackId] ?: return
+        if (!track.isPaused) return
+        track.isPaused = false
+        track.player.play()
+        updateActiveState()
+    }
+
+    override fun seekTo(playbackId: String, positionMs: Long) {
+        val track = activeTracks[playbackId] ?: return
+        val totalSpan = max(1L, track.endMs - track.startMs)
+        val clampedPos = positionMs.coerceIn(0L, totalSpan)
+        val targetAbsoluteMs = track.startMs + clampedPos
+        track.player.currentTime = targetAbsoluteMs / 1000.0
+        updateActiveState()
     }
 
     override fun preload(cue: Cue, basePath: String) {

@@ -87,6 +87,22 @@ interface AudioEngine {
     fun isPreviewing(): Boolean = false
 
     /**
+     * Pauses an active playback instance.
+     */
+    fun pause(playbackId: String) {}
+
+    /**
+     * Resumes a paused playback instance.
+     */
+    fun resume(playbackId: String) {}
+
+    /**
+     * Seeks an active playback instance to the specified position in milliseconds
+     * (relative to the cue's trimmed duration).
+     */
+    fun seekTo(playbackId: String, positionMs: Long) {}
+
+    /**
      * Releases all audio resources and worker threads.
      */
     fun release()

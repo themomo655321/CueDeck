@@ -51,7 +51,8 @@ class AndroidAudioEngine(private val context: Context) : AudioEngine {
         var isFadingOut: Boolean = false,
         var fadeJob: Job? = null,
         var monitorJob: Job? = null,
-        val isReleased: AtomicBoolean = AtomicBoolean(false)
+        val isReleased: AtomicBoolean = AtomicBoolean(false),
+        val isPaused: AtomicBoolean = AtomicBoolean(false)
     )
 
     private val activeTracks = ConcurrentHashMap<String, AndroidTrack>()
@@ -166,7 +167,7 @@ class AndroidAudioEngine(private val context: Context) : AudioEngine {
                         for (i in 0 until steps) {
                             delay(50)
                             if (track.isReleased.get() || !isActive) break
-                            if (!track.isFadingOut && safeIsPlaying(track.player)) {
+                            if (!track.isFadingOut && !track.isPaused.get() && safeIsPlaying(track.player)) {
                                 track.currentVolume = (track.currentVolume + delta).coerceIn(0f, targetVol)
                                 safeSetVolume(track.player, track.currentVolume)
                             }
@@ -174,16 +175,24 @@ class AndroidAudioEngine(private val context: Context) : AudioEngine {
                     }
 
                     // Check out-point safely
-                    while (isActive && !track.isReleased.get() && safeIsPlaying(track.player)) {
+                    while (isActive && !track.isReleased.get()) {
                         delay(30)
                         if (track.isReleased.get() || !isActive) break
+                        if (track.isPaused.get()) {
+                            delay(50)
+                            continue
+                        }
+                        if (!safeIsPlaying(track.player)) {
+                            // Player stopped naturally and was not paused -> finished
+                            break
+                        }
                         val currentPos = safeGetCurrentPosition(track.player)
                         if (cue.triggerMode != TriggerMode.LOOP && currentPos >= endMs) {
                             break
                         }
                     }
 
-                    if (!track.isFadingOut && !track.isReleased.get()) {
+                    if (!track.isFadingOut && !track.isReleased.get() && !track.isPaused.get()) {
                         stopTrackInternal(playbackId)
                         _playbackCompletedEvents.emit(cue)
                     }
@@ -270,6 +279,50 @@ class AndroidAudioEngine(private val context: Context) : AudioEngine {
                 safeSetVolume(track.player, track.currentVolume)
             }
         }
+    }
+
+    override fun pause(playbackId: String) {
+        val track = activeTracks[playbackId] ?: return
+        if (track.isReleased.get() || track.isPaused.get()) return
+        track.isPaused.set(true)
+        try {
+            if (safeIsPlaying(track.player)) {
+                track.player.pause()
+            }
+        } catch (e: Exception) {
+            ErrorLogger.error("AndroidAudioEngine", "Error pausing track $playbackId", e)
+        }
+        updateActiveState()
+    }
+
+    override fun resume(playbackId: String) {
+        val track = activeTracks[playbackId] ?: return
+        if (track.isReleased.get() || !track.isPaused.get()) return
+        track.isPaused.set(false)
+        try {
+            track.player.start()
+        } catch (e: Exception) {
+            ErrorLogger.error("AndroidAudioEngine", "Error resuming track $playbackId", e)
+        }
+        updateActiveState()
+    }
+
+    override fun seekTo(playbackId: String, positionMs: Long) {
+        val track = activeTracks[playbackId] ?: return
+        if (track.isReleased.get()) return
+        val totalSpan = max(1L, track.endMs - track.startMs)
+        val clampedPos = positionMs.coerceIn(0L, totalSpan)
+        val targetAbsoluteMs = track.startMs + clampedPos
+        try {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                track.player.seekTo(targetAbsoluteMs, MediaPlayer.SEEK_CLOSEST)
+            } else {
+                track.player.seekTo(targetAbsoluteMs.toInt())
+            }
+        } catch (e: Exception) {
+            ErrorLogger.error("AndroidAudioEngine", "Error seeking track $playbackId to $targetAbsoluteMs", e)
+        }
+        updateActiveState()
     }
 
     override suspend fun getWaveformPeaks(cue: Cue, basePath: String, peakCount: Int): List<Float> {
@@ -451,7 +504,8 @@ class AndroidAudioEngine(private val context: Context) : AudioEngine {
                     totalMs = totalMs,
                     volume = track.currentVolume,
                     isLooping = track.cue.triggerMode == TriggerMode.LOOP,
-                    isFadingOut = track.isFadingOut
+                    isFadingOut = track.isFadingOut,
+                    isPaused = track.isPaused.get()
                 )
             } catch (e: Exception) {
                 null

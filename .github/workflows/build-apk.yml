@@ -53,41 +53,34 @@ jobs:
       - name: Prepare APK Asset
         run: |
             mkdir -p release_assets
-            cp androidApp/build/outputs/apk/debug/androidApp-debug.apk release_assets/CueDeck-v1.1.4-debug.apk
+            cp androidApp/build/outputs/apk/debug/androidApp-debug.apk release_assets/CueDeck-v1.1.5-debug.apk
 
       - name: Upload APK as Workflow Artifact
         uses: actions/upload-artifact@v4
         with:
           name: CueDeck-debug-apk
-          path: release_assets/CueDeck-v1.1.4-debug.apk
+          path: release_assets/CueDeck-v1.1.5-debug.apk
           retention-days: 14
 
       - name: Create or Update GitHub Release
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: v1.1.4
-          name: "CueDeck v1.1.4 Preview APK"
+          tag_name: v1.1.5
+          name: "CueDeck v1.1.5 - Now Playing Pause & Scrub Seek"
           make_latest: true
           body: |
-            ### 🎛️ CueDeck v1.1.4 - Integer Cue Numbers, Multi-Gear FINE Faders & Clean Fader Strips
+            ### 🎛️ CueDeck v1.1.5 - Now Playing Pause/Resume & Interactive Scrub Seek
             Direct Android APK build for mobile & tablet live testing.
 
-            #### 🛠️ What's New in v1.1.4:
-            - **Clean Integer Cue Numbers**:
-              - Stripped unwanted decimal formatting (`.0`). Cues now display as clean whole numbers (`1`, `2`, `3`...) across Cue Stack, Armed Banner, Cue Editor, and Go Button.
-              - Auto-sanitizes existing saved shows on load so legacy `.0` cues are automatically cleaned up.
-            - **Complete Removal of Reverb TAIL Feature**:
-              - Purged all legacy audio effects, reverb sessions, and decay loops from `AndroidAudioEngine` and `AudioEngine`.
-              - Expanded the **MUTE** button to the full width of each fader strip (22dp height) for rapid, error-free single-tap muting on stage.
-            - **Multi-Gear Precision [FINE] Mode (OFF -> 4X -> 8X -> 16X -> OFF)**:
-              - Replaced single toggle with a 4-state cycling precision mode:
-                - **OFF** (Dark Gray): Standard 1:1 hardware travel.
-                - **FINE 4X** (Cyan): 4x virtual travel and refined elastic chasing for gentle ride.
-                - **FINE 8X** (Amber): 8x virtual travel for precision balance adjustments.
-                - **FINE 16X** (Electric Magenta): 16x virtual travel with ultra-fine micro-chasing for surgical sub-decibel trimming.
-            - **Capped Now Playing Drawer & Guaranteed Cue Stack Visibility**:
-              - Compacted the "Now Playing" drawer to max 58dp in landscape with sleek 24dp rows.
-              - Prevents the Cue Stack from ever being squashed or pushed off-screen when 1, 2, 3, or more cues are actively playing simultaneously.
-          files: release_assets/CueDeck-v1.1.4-debug.apk
+            #### 🛠️ What's New in v1.1.5:
+            - **Live Pause & Resume on Now Playing Cues**:
+              - Instant single-tap Pause / Play button added to every active playback row.
+              - Live countdown badge clearly indicates `PAUSED` state with amber feedback.
+              - Full cross-platform audio pause/resume support (`AndroidAudioEngine`, `IosAudioEngine`, `DesktopAudioEngine`).
+            - **Interactive Touch & Drag Scrubber Seek Bar**:
+              - Replaced static progress indicator with an interactive stage scrubber.
+              - Tap anywhere along the bar to immediately jump the playhead, or drag your finger smoothly to scrub forward/backward.
+              - Real-time thumb indicator and progress line reflecting live position.
+          files: release_assets/CueDeck-v1.1.5-debug.apk
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

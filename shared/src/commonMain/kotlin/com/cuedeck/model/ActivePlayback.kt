@@ -14,7 +14,8 @@ data class ActivePlayback(
     val totalMs: Long,
     val volume: Float,
     val isLooping: Boolean,
-    val isFadingOut: Boolean
+    val isFadingOut: Boolean,
+    val isPaused: Boolean = false
 ) {
     val progress: Float
         get() = if (totalMs > 0) (elapsedMs.toFloat() / totalMs).coerceIn(0f, 1f) else 0f

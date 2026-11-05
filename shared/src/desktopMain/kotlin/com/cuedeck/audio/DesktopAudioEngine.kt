@@ -40,6 +40,7 @@ class DesktopAudioEngine : AudioEngine {
         val endMicroseconds: Long,
         var currentVolume: Float,
         var isFadingOut: Boolean = false,
+        var isPaused: Boolean = false,
         var fadeJob: Job? = null
     )
 
@@ -112,15 +113,20 @@ class DesktopAudioEngine : AudioEngine {
                 }
 
                 // Wait until end point reached
-                while (track.clip.isOpen && track.clip.isRunning) {
+                while (track.clip.isOpen) {
                     delay(30)
+                    if (track.isPaused) {
+                        delay(50)
+                        continue
+                    }
+                    if (!track.clip.isRunning) break
                     if (cue.triggerMode != TriggerMode.LOOP && track.clip.microsecondPosition >= endUs) {
                         break
                     }
                 }
 
                 // If finished naturally
-                if (!track.isFadingOut) {
+                if (!track.isFadingOut && !track.isPaused) {
                     stopTrackInternal(playbackId, immediate = true)
                     _playbackCompletedEvents.emit(cue)
                 }
@@ -202,6 +208,40 @@ class DesktopAudioEngine : AudioEngine {
         }
     }
 
+    override fun pause(playbackId: String) {
+        val track = activeTracks[playbackId] ?: return
+        if (track.isPaused) return
+        track.isPaused = true
+        if (track.clip.isOpen && track.clip.isRunning) {
+            track.clip.stop()
+        }
+        updateActiveState()
+    }
+
+    override fun resume(playbackId: String) {
+        val track = activeTracks[playbackId] ?: return
+        if (!track.isPaused) return
+        track.isPaused = false
+        if (track.clip.isOpen && !track.clip.isRunning) {
+            if (track.cue.triggerMode == TriggerMode.LOOP) {
+                track.clip.loop(Clip.LOOP_CONTINUOUSLY)
+            } else {
+                track.clip.start()
+            }
+        }
+        updateActiveState()
+    }
+
+    override fun seekTo(playbackId: String, positionMs: Long) {
+        val track = activeTracks[playbackId] ?: return
+        if (!track.clip.isOpen) return
+        val totalUs = max(1L, track.endMicroseconds - track.startMicroseconds)
+        val clampedUs = (positionMs * 1000L).coerceIn(0L, totalUs)
+        val targetUs = track.startMicroseconds + clampedUs
+        track.clip.microsecondPosition = targetUs
+        updateActiveState()
+    }
+
     private fun stopTrackInternal(playbackId: String, immediate: Boolean) {
         val track = activeTracks.remove(playbackId) ?: return
         track.fadeJob?.cancel()
@@ -239,7 +279,8 @@ class DesktopAudioEngine : AudioEngine {
                 totalMs = totalUs / 1000L,
                 volume = track.currentVolume,
                 isLooping = track.cue.triggerMode == TriggerMode.LOOP,
-                isFadingOut = track.isFadingOut
+                isFadingOut = track.isFadingOut,
+                isPaused = track.isPaused
             )
         }
         _activePlaybacks.value = list
